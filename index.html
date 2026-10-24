@@ -127,6 +127,14 @@ body {
   max-width: 130px;
   line-height: 1.25;
 }
+/* The version sat only in the header button row, where it was easy to miss
+   and absent from the phone entirely. It now also sits under the wordmark. */
+.brand-version {
+  font-size: 10.5px; font-weight: 700;
+  color: var(--gold, #c9a84c);
+  letter-spacing: 0.6px;
+  margin-top: 2px;
+}
 
 .header-divider {
   width: 1px; background: rgba(255,255,255,0.15);
@@ -28165,7 +28173,7 @@ function renderInstallRow() {
    One constant, stamped into every page header at boot rather than written
    into four blocks of markup — so bumping it is a one-line change and the
    pages can never disagree about which version they are. */
-const APP_VERSION = 'v1.19';
+const APP_VERSION = 'v1.20';
 function stampAppVersion() {
   document.querySelectorAll('.header-actions').forEach(host => {
     let el = host.querySelector('.app-version');
@@ -28177,6 +28185,43 @@ function stampAppVersion() {
     el.textContent = APP_VERSION;
     el.title = 'Sentry Box Weekly Planner ' + APP_VERSION;
   });
+  // ...and directly under the wordmark on every page, where it is actually
+  // noticed. querySelectorAll covers the weekly, Mind Dump, quarterly and
+  // reminders headers in one pass.
+  document.querySelectorAll('.brand-tagline').forEach(tag => {
+    let v = tag.parentNode && tag.parentNode.querySelector('.brand-version');
+    if (!v) {
+      v = document.createElement('div');
+      v.className = 'brand-version';
+      if (tag.parentNode) tag.parentNode.insertBefore(v, tag.nextSibling);
+    }
+    v.textContent = APP_VERSION;
+    v.title = 'Sentry Box Weekly Planner ' + APP_VERSION;
+  });
+}
+
+/* Clear everything the browser is holding and come back on the newest file.
+   A phone app keeps its own copy for offline use, so "just reload" is not
+   always enough: the worker is told to drop its caches, the registration is
+   removed, and the reload carries a one-off query so no cache can answer. */
+async function forceAppUpdate() {
+  try { showToast('Checking for a new version…', 2500); } catch (_) {}
+  try {
+    if ('serviceWorker' in navigator) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      regs.forEach(r => { try { r.active && r.active.postMessage('sb-sw-reset'); } catch (_) {} });
+      await Promise.all(regs.map(r => r.unregister().catch(() => false)));
+    }
+    if (window.caches && caches.keys) {
+      const ks = await caches.keys();
+      await Promise.all(ks.map(k => caches.delete(k).catch(() => false)));
+    }
+  } catch (_) {}
+  try {
+    const u = new URL(location.href);
+    u.searchParams.set('v', Date.now().toString(36));
+    location.replace(u.toString());
+  } catch (_) { location.reload(); }
 }
 
 /* ══════════════════════════════════════════════════════════════════
@@ -33494,7 +33539,9 @@ function pocketRender() {
   if (!pocketIsOpen()) return;
   const titles = { today: 'Today', add: 'Add', shop: 'Shopping', more: 'More' };
   document.getElementById('pk-title').textContent = titles[_pkTab];
-  document.getElementById('pk-date').textContent = new Date().toLocaleDateString('en-CA', { weekday: 'long', month: 'long', day: 'numeric' });
+  document.getElementById('pk-date').textContent =
+    new Date().toLocaleDateString('en-CA', { weekday: 'long', month: 'long', day: 'numeric' })
+    + (typeof APP_VERSION !== 'undefined' ? '  ·  ' + APP_VERSION : '');
   pocketRenderSync();
   const m = document.getElementById('pk-main');
   const keepFocus = document.activeElement && m.contains(document.activeElement) && document.activeElement.id;
@@ -33736,6 +33783,7 @@ function _pkClick(e) {
   // Moving data by file — the route that needs no account.
   if (act === 'tload') { try { loadSyncFromOneDrive(); } catch (e) { showToast('Could not open the file picker'); } return; }
   if (act === 'tsave') { try { saveSyncToOneDrive(); } catch (e) { showToast('Could not save the file'); } return; }
+  if (act === 'update') { forceAppUpdate(); return; }
 }
 function _pkAddNote() {
   const inp = document.getElementById('pk-note-in'); const v = inp ? inp.value.trim() : '';
@@ -33900,6 +33948,12 @@ function _pkMore() {
     ['top3', '📌', 'Top 3 post-it'], ['glance', '🔭', 'Week at a glance'], ['qtr', '📅', 'Quarterly plan'], ['full', '🖥️', 'Full planner']
   ].map(([v, ic, l]) => `<button class="pk-tile" data-act="open" data-v="${v}"><span class="ic">${ic}</span>${l}</button>`).join('') + '</div>';
   h += _pkTransferCard();
+  h += `<div class="pk-card"><h3>↻ App version</h3><div class="pk-info">
+      This phone is running <b>${_pkEsc(APP_VERSION)}</b>.<br><br>
+      The app keeps its own copy so it opens without a signal, so a new version can take
+      a second opening to appear. This button throws that copy away and fetches the
+      newest one. Nothing you have typed is affected.</div>
+    <div class="pk-actions"><button class="pk-btn navy" data-act="update">Check for a new version</button></div></div>`;
   h += _pkOneDriveCard();
   // Install
   if (installSupported() && !isInstalled()) {
@@ -34005,8 +34059,9 @@ window.addEventListener('DOMContentLoaded', () => {
     go = u.searchParams.get('go') || '';
     const parts = ['st', 'sx', 'su'].map(k => u.searchParams.get(k)).filter(Boolean);
     shared = Array.from(new Set(parts)).join('\n');
-    if (go || parts.length || u.searchParams.get('source')) {
-      ['go', 'st', 'sx', 'su', 'source'].forEach(k => u.searchParams.delete(k));
+    if (go || parts.length || u.searchParams.get('source') || u.searchParams.get('v')) {
+      // 'v' is the cache-buster forceAppUpdate() adds; drop it once we are here.
+      ['go', 'st', 'sx', 'su', 'source', 'v'].forEach(k => u.searchParams.delete(k));
       history.replaceState(null, '', u.pathname + (u.searchParams.toString() ? '?' + u.searchParams.toString() : '') + u.hash);
     }
   } catch (_) {}

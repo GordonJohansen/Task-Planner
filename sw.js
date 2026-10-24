@@ -12,7 +12,7 @@
    your OneDrive sync file, never in this cache.
    ---------------------------------------------------------------------- */
 
-const CACHE = 'sb-planner-app-v1-17';
+const CACHE = 'sb-planner-app-v1-20';
 const SHELL = ['./', './manifest.webmanifest', './icon-192.png', './icon-512.png'];
 
 // Take over straight away so a new version is in charge on the next open,
@@ -81,7 +81,16 @@ self.addEventListener('fetch', e => {
     try {
       const ctrl = new AbortController();
       const timer = setTimeout(() => ctrl.abort(), isPage ? 6000 : 10000);
-      const res = await fetch(req, { signal: ctrl.signal });
+      // Going network-first is not enough on its own: this fetch would still
+      // be answered by the browser's own HTTP cache, and GitHub Pages marks
+      // pages cacheable for several minutes. A phone reopened inside that
+      // window would keep getting the old planner and look like it had not
+      // updated. For the page itself, ask for a fresh copy explicitly.
+      // A navigation Request cannot be re-wrapped, so build a plain one.
+      const hit = isPage
+        ? fetch(new Request(req.url, { cache: 'reload', credentials: 'same-origin' }), { signal: ctrl.signal })
+        : fetch(req, { signal: ctrl.signal });
+      const res = await hit;
       clearTimeout(timer);
       if (res && res.ok) {
         const copy = res.clone();
