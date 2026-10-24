@@ -7478,7 +7478,6 @@ textarea.rem-input { resize:vertical; }
     <div class="daily3-footer">
       <button class="btn btn-navy btn-sm" onclick="saveDaily3Now()">✓ Save</button>
       <button class="btn btn-gold btn-sm" onclick="popOutDaily3()" title="Open as a small always-visible window">📌 Pop out</button>
-      <button class="btn btn-gold btn-sm" onclick="downloadDaily3ForPhone()" title="Download a self-contained file for your phone">📱 Save for phone</button>
       <button class="btn btn-gold btn-sm" onclick="sendDaily3ToApp()" title="Send to Keep, Tasks, Gmail, or any app on your phone (or copy on desktop)">📲 Send to app</button>
       <button class="btn btn-gold btn-sm" onclick="emailDaily3ToSelf()" title="Open your email app pre-filled with the Daily 3 — send to yourself for easy phone access">📧 Email to me</button>
       <button class="btn btn-outline btn-sm" onclick="printDaily3()" title="Print as a small note">🖨 Print</button>
@@ -7493,7 +7492,7 @@ textarea.rem-input { resize:vertical; }
       <div class="daily3-hint" id="daily3-hint">
         💡 Items carry forward day to day until you finish them — checking one off keeps it on today and stops it carrying. Use the dropdown beside each item to move it to a Mind Dump section.
         <br><br>
-        📌 <strong>Pop out</strong> opens a tiny always-visible window · 📱 <strong>Save for phone</strong> makes a home-screen shortcut · 📲 <strong>Send to app</strong> shares into Keep/Tasks/Gmail · 📧 <strong>Email to me</strong> mails you today's list · 🔄 <strong>New day</strong> advances the day and moves unfinished items to tomorrow's notes.
+        📌 <strong>Pop out</strong> opens a tiny always-visible window · 📲 <strong>Send to app</strong> shares into Keep/Tasks/Gmail · 📧 <strong>Email to me</strong> mails you today's list · 🔄 <strong>New day</strong> advances the day and moves unfinished items to tomorrow's notes.
       </div>
     </div>
   </div>
@@ -13150,13 +13149,6 @@ function _d3StoredForm() {
   return d;
 }
 
-function downloadDaily3ForPhone() {
-  _d3SaveIfOpen();
-  const html = buildDaily3StandaloneHTML(/* phone */ true);
-  const filename = `sentry-box-daily3-${todayKey()}.html`;
-  downloadFile(filename, html);
-  showToast('📱 Downloaded! Open on your phone, then "Add to Home Screen" for a sticky-note shortcut.');
-}
 
 /* ── SEND TO APP: share or copy the Daily 3 as plain text ──
    On mobile (or desktops that support the Web Share API), this opens
@@ -13740,7 +13732,6 @@ function buildDaily3StandaloneHTML(forPhone) {
     <div class="footer-row">
       <button class="send" onclick="sendToApp()" title="Share to Keep, Tasks, Gmail, etc.">📲 Send</button>
       <button class="send" onclick="emailToSelf()" title="Open mail app pre-filled">📧 Email</button>
-      ${forPhone ? '' : '<button class="secondary" onclick="savePhone()" title="Download a self-contained file for phone">📱 Phone</button>'}
       <button class="secondary" onclick="window.print()" title="Print this list">🖨 Print</button>
     </div>
   </div>
@@ -14381,26 +14372,6 @@ function emailToSelf() {
   flash('Opening email…');
 }
 
-function savePhone() {
-  // Re-snapshot the current pop-out state as a downloadable phone file.
-  // We do this by asking the parent to build & download it for us, since
-  // the parent has the buildDaily3StandaloneHTML helper.
-  persist();
-  if (window.opener && !window.opener.closed && window.opener.downloadDaily3ForPhone) {
-    try {
-      // Sync our latest data back to the parent first so the phone
-      // snapshot reflects what we just edited.
-      window.opener.postMessage({ type: 'sentrybox-daily3-save', data: gather() }, _SB_TO);
-      // Then ask the parent to do the download (it has the helper)
-      setTimeout(() => window.opener.downloadDaily3ForPhone(), 200);
-      flash('Building phone file…');
-    } catch (e) {
-      flash('Could not download: ' + e.message);
-    }
-  } else {
-    flash('Open from main planner to use this');
-  }
-}
 
 // Date display: track an offset from today in localStorage so the user
 // Date display: when this window is a pop-out, the canonical date and
@@ -28253,7 +28224,7 @@ function renderInstallRow() {
    One constant, stamped into every page header at boot rather than written
    into four blocks of markup — so bumping it is a one-line change and the
    pages can never disagree about which version they are. */
-const APP_VERSION = 'v1.23';
+const APP_VERSION = 'v1.24';
 function stampAppVersion() {
   document.querySelectorAll('.header-actions').forEach(host => {
     let el = host.querySelector('.app-version');
@@ -28963,7 +28934,31 @@ async function saveSyncToOneDrive() {
       _syncFileHandle = null;
     }
   }
-  // Fallback: plain download. On desktop, save it into your OneDrive folder.
+  // A phone has no save picker, so the download below lands silently in the
+  // Downloads folder — the file is saved, but nothing on screen says where it
+  // went or how to get it to OneDrive. The share sheet is the gesture that
+  // actually belongs here: it hands the file straight to the OneDrive app.
+  try {
+    const file = new File([json], SYNC_FILE_NAME, { type: 'application/json' });
+    if (navigator.canShare && navigator.share && navigator.canShare({ files: [file] })) {
+      try {
+        await navigator.share({ files: [file], title: SYNC_FILE_NAME });
+        xferRemember('save');
+        showToast('✓ Sent — choose OneDrive so your computer can load it', 6000);
+        return;
+      } catch (e) {
+        // Cancelling the share sheet is a decision, not a failure: do not
+        // then quietly download a copy they did not ask for.
+        if (e && (e.name === 'AbortError' || e.name === 'NotAllowedError')) {
+          showToast('Nothing was sent.');
+          return;
+        }
+        // anything else: fall through to the download
+      }
+    }
+  } catch (_) {}
+
+  // Fallback: plain download. Say where the file actually went.
   try {
     const blob = new Blob([json], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -28972,7 +28967,7 @@ async function saveSyncToOneDrive() {
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
     setTimeout(() => URL.revokeObjectURL(url), 1500);
     xferRemember('save');
-    showToast('✓ Data file saved — put it in your OneDrive folder');
+    showToast('✓ Saved as ' + SYNC_FILE_NAME + ' in your Downloads — move it into OneDrive', 7000);
   } catch (e) {
     showToast('⚠ Could not save the data file: ' + (e.message || 'error'));
   }
