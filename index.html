@@ -2468,6 +2468,10 @@ textarea.sbf-input { resize: vertical; line-height: 1.45; }
       <button class="glance-btn" onclick="openTimeReport()" style="margin-top:6px;background:var(--accent-time);" title="See where your time goes — totals by category and subcategory">📊 Time report</button>
       <button class="glance-btn" onclick="openCompanion()" style="margin-top:6px;background:var(--navy);" title="Open the phone / tablet companion view">📱 Phone / Tablet view</button>
       <button class="glance-btn" onclick="saveSyncToOneDrive()" style="margin-top:6px;background:var(--gold-grad);" title="Save your data to a file in OneDrive so your phone and tablet can load it">💾 Save data to OneDrive</button>
+      <!-- The matching half of the pair. Save was here on its own, so
+           changes made on the phone had no obvious way back in: Load
+           existed only inside the phone/tablet view. -->
+      <button class="glance-btn" onclick="loadSyncFromOneDrive()" style="margin-top:6px;background:var(--navy);" title="Load sentrybox-sync.json back in — use this after making changes on your phone">📥 Load data from file</button>
     </div>
 
     <div class="sidebar-section">
@@ -28173,7 +28177,7 @@ function renderInstallRow() {
    One constant, stamped into every page header at boot rather than written
    into four blocks of markup — so bumping it is a one-line change and the
    pages can never disagree about which version they are. */
-const APP_VERSION = 'v1.21';
+const APP_VERSION = 'v1.22';
 function stampAppVersion() {
   document.querySelectorAll('.header-actions').forEach(host => {
     let el = host.querySelector('.app-version');
