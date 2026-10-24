@@ -2505,6 +2505,25 @@ textarea.sbf-input { resize: vertical; line-height: 1.45; }
 
     <div class="sidebar-divider"></div>
 
+    <!-- Project Tracker — a separate app that lives beside this one.
+         A plain link rather than window.open(): pop-up blockers leave a
+         real link alone, and middle-click / open-in-new-tab keep working.
+         The path is relative, so it finds tracker.html whether the planner
+         is opened from a folder or served from the web. -->
+    <div class="sidebar-section">
+      <div class="sidebar-title">🏗 Project Tracker</div>
+      <div class="cu-hint-sm">
+        Jobs with phases and deadlines — builds, renos, maintenance. Opens in a new tab,
+        and keeps its own separate data.
+      </div>
+      <a class="btn btn-navy btn-sm" href="tracker.html" target="_blank" rel="noopener"
+         style="width:100%; justify-content:center; margin-top:6px; text-decoration:none;">
+        🏗 Open Project Tracker
+      </a>
+    </div>
+
+    <div class="sidebar-divider"></div>
+
     <!-- Share With -->
     <div class="sidebar-section">
       <div class="sidebar-title">📧 Share With</div>
@@ -3434,8 +3453,8 @@ textarea.sbf-input { resize: vertical; line-height: 1.45; }
       <button class="btn btn-outline btn-sm" type="button" onclick="closeSetupModal(); openCatBulk()">Edit categories</button>
     </div>
     <div class="setup-locations-bar" style="border-top:none; padding-top:0;">
-      <span class="setup-loc-hint">📥 Store Projects: pull tasks you sent from the Store Projects app</span>
-      <button class="btn btn-outline btn-sm" type="button" onclick="importFromStoreProjects()">Import from Store Projects</button>
+      <span class="setup-loc-hint">📥 Project Tracker: pull tasks you sent from the Project Tracker app</span>
+      <button class="btn btn-outline btn-sm" type="button" onclick="importFromProjectTracker()">Import from Project Tracker</button>
     </div>
     <div class="qa-btn-row" style="margin-top:18px;">
       <div style="flex:1;"></div>
@@ -3448,10 +3467,10 @@ textarea.sbf-input { resize: vertical; line-height: 1.45; }
 <div class="modal-overlay" id="sp-unsched-modal">
   <div class="modal" style="max-width:600px; width:94%; max-height:90vh; overflow-y:auto; display:flex; flex-direction:column;">
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
-      <div class="modal-title" style="margin:0;">📥 Unscheduled — from Store Projects</div>
+      <div class="modal-title" style="margin:0;">📥 Unscheduled — from Project Tracker</div>
       <button class="modal-close" onclick="closeSpUnscheduledModal()">✕</button>
     </div>
-    <p class="setup-intro">Tasks sent from Store Projects that had no due date. Give one a date to drop it onto that day's Daily 3 list, or remove it. Placing a task moves it off this list.</p>
+    <p class="setup-intro">Tasks sent from Project Tracker that had no due date. Give one a date to drop it onto that day's Daily 3 list, or remove it. Placing a task moves it off this list.</p>
     <div id="sp-unsched-list" style="display:flex; flex-direction:column; gap:8px;"></div>
     <div class="qa-btn-row" style="margin-top:18px;">
       <div style="flex:1;"></div>
@@ -11289,9 +11308,9 @@ function saveDaily3ByDate(map) {
 }
 
 /* ══════════════════════════════════════════════
-   IMPORT FROM STORE PROJECTS
+   IMPORT FROM PROJECT TRACKER
    Reads planner_inbox.json from the shared (backup) folder — written by the
-   Store Projects app — and pulls its tasks in. This is a one-way copy:
+   Project Tracker app — and pulls its tasks in. This is a one-way copy:
      • DATED tasks are appended to that date's Daily-3 list (as a note row,
        index 3+, never overwriting a Top-3 slot).
      • UNDATED tasks wait in an "unscheduled" list (SP_UNSCHED_KEY) that the
@@ -11299,7 +11318,7 @@ function saveDaily3ByDate(map) {
    Idempotent: each source task carries a stable id; we track ids we've
    already imported (SP_IMPORTED_KEY) so re-importing the same file — or a
    file that was topped up with new tasks — never duplicates what's already
-   in. Nothing here reaches back to Store Projects; marking a task done in
+   in. Nothing here reaches back to Project Tracker; marking a task done in
    the Planner does not touch the project.
 ══════════════════════════════════════════════ */
 const SP_UNSCHED_KEY = 'sb_sp_unscheduled';
@@ -11369,16 +11388,16 @@ function saveSpImportedIds(set) {
   localStorage.setItem(SP_IMPORTED_KEY, JSON.stringify(Array.from(set)));
 }
 
-async function importFromStoreProjects() {
+async function importFromProjectTracker() {
   if (!FS_API_AVAILABLE) {
     showToast('Importing needs Chrome or Edge (folder access).');
     return;
   }
   // Reuse the backup folder — that's where the user already points at their
-  // OneDrive folder, and where Store Projects writes planner_inbox.json.
+  // OneDrive folder, and where Project Tracker writes planner_inbox.json.
   let dir = await getBackupDirHandle(true);
   if (!dir) {
-    const pick = confirm('To import, pick the shared folder that Store Projects saves to (the same OneDrive folder). Choose it now?');
+    const pick = confirm('To import, pick the shared folder that Project Tracker saves to (the same OneDrive folder). Choose it now?');
     if (!pick) return;
     const ok = await chooseBackupFolder();
     if (!ok) return;
@@ -11393,7 +11412,7 @@ async function importFromStoreProjects() {
     items = JSON.parse(await f.text());
     if (!Array.isArray(items)) throw new Error('bad shape');
   } catch (e) {
-    showToast('No planner_inbox.json found in that folder yet. Send tasks from Store Projects first.');
+    showToast('No planner_inbox.json found in that folder yet. Send tasks from Project Tracker first.');
     return;
   }
 
@@ -11466,7 +11485,7 @@ function renderSpUnscheduled() {
   if (!host) return;
   const list = loadSpUnscheduled();
   if (!list.length) {
-    host.innerHTML = '<p style="color:var(--muted); font-size:14px;">Nothing waiting. Tasks you send undated from Store Projects will appear here.</p>';
+    host.innerHTML = '<p style="color:var(--muted); font-size:14px;">Nothing waiting. Tasks you send undated from Project Tracker will appear here.</p>';
     return;
   }
   const todayKey = (typeof todayDateKey === 'function') ? todayDateKey() : '';
@@ -12893,7 +12912,7 @@ function _advanceDailyDayInternal(explicitTarget, plan) {
   // Top 3 slots start empty — EXCEPT for anything already planned for that
   // day. v1.11: the slots used to be blanked unconditionally, which threw away
   // items deliberately sent to a future day's Top 3 (the Weekly Review's
-  // "#1 for next week", dated tasks imported from Store Projects).
+  // "#1 for next week", dated tasks imported from Project Tracker).
   const nextTop3 = [
     { rate: null, text: '' },
     { rate: null, text: '' },
@@ -28146,7 +28165,7 @@ function renderInstallRow() {
    One constant, stamped into every page header at boot rather than written
    into four blocks of markup — so bumping it is a one-line change and the
    pages can never disagree about which version they are. */
-const APP_VERSION = 'v1.17';
+const APP_VERSION = 'v1.18';
 function stampAppVersion() {
   document.querySelectorAll('.header-actions').forEach(host => {
     let el = host.querySelector('.app-version');
