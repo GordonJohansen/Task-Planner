@@ -28165,7 +28165,7 @@ function renderInstallRow() {
    One constant, stamped into every page header at boot rather than written
    into four blocks of markup — so bumping it is a one-line change and the
    pages can never disagree about which version they are. */
-const APP_VERSION = 'v1.18';
+const APP_VERSION = 'v1.19';
 function stampAppVersion() {
   document.querySelectorAll('.header-actions').forEach(host => {
     let el = host.querySelector('.app-version');
@@ -33733,6 +33733,9 @@ function _pkClick(e) {
   if (act === 'rename') { syncRenameDevice().then(() => pocketRender()); return; }
   if (act === 'install') { promptInstall(); return; }
   if (act === 'check') { pocketSyncTap(); return; }
+  // Moving data by file — the route that needs no account.
+  if (act === 'tload') { try { loadSyncFromOneDrive(); } catch (e) { showToast('Could not open the file picker'); } return; }
+  if (act === 'tsave') { try { saveSyncToOneDrive(); } catch (e) { showToast('Could not save the file'); } return; }
 }
 function _pkAddNote() {
   const inp = document.getElementById('pk-note-in'); const v = inp ? inp.value.trim() : '';
@@ -33896,6 +33899,7 @@ function _pkMore() {
     ['mdb', '🧠', 'Mind Dump · Business'], ['mdp', '🏠', 'Mind Dump · Personal'], ['rem', '⏰', 'Reminders'], ['prom', '🤝', 'Promises'],
     ['top3', '📌', 'Top 3 post-it'], ['glance', '🔭', 'Week at a glance'], ['qtr', '📅', 'Quarterly plan'], ['full', '🖥️', 'Full planner']
   ].map(([v, ic, l]) => `<button class="pk-tile" data-act="open" data-v="${v}"><span class="ic">${ic}</span>${l}</button>`).join('') + '</div>';
+  h += _pkTransferCard();
   h += _pkOneDriveCard();
   // Install
   if (installSupported() && !isInstalled()) {
@@ -33906,14 +33910,33 @@ function _pkMore() {
     <div class="pk-actions"><button class="pk-btn" data-act="rename">Rename</button></div></div>`;
   return h;
 }
+/* Moving data by file is the route most people will use: no account, no
+   sign-in, nothing to set up, and it works the same on every phone. It sits
+   above the OneDrive card because automatic sync needs an app registration
+   that a personal Microsoft account cannot create without first setting up
+   an Azure directory. */
+function _pkTransferCard() {
+  return '<div class="pk-card gold"><h3>↔ Move data to and from your computer</h3>' +
+    '<div class="pk-info">No account or sign-in needed.<br><br>' +
+    '<b>To bring your planner here:</b> on the computer press <b>💾 Save data to OneDrive</b>, ' +
+    'then on this phone tap <b>Load from a file</b> and pick <b>sentrybox-sync.json</b>.<br><br>' +
+    '<b>To send this phone’s changes back:</b> tap <b>Save to a file</b> here, put that file in ' +
+    'OneDrive, then load it on the computer.</div>' +
+    '<div class="pk-actions">' +
+      '<button class="pk-btn navy" data-act="tload">📥 Load from a file</button>' +
+      '<button class="pk-btn" data-act="tsave">💾 Save to a file</button>' +
+    '</div></div>';
+}
 function _pkOneDriveCard() {
-  let h = '<div class="pk-card gold"><h3>OneDrive</h3>';
+  let h = '<div class="pk-card"><h3>OneDrive sign-in (optional)</h3>';
   if (!graphPossible()) {
     return h + '<div class="pk-info">Direct OneDrive sync needs the planner opened from its web address (not a file). Until then: <b>Load latest data</b> / <b>Save my changes</b> in the old phone view.</div></div>';
   }
   const c = graphCfg();
   if (!c.clientId) {
-    return h + `<div class="pk-info">On your computer: <b>Setup → Phone app → Show the QR code</b>, and scan it with this phone's camera. That sets everything here.</div>
+    return h + `<div class="pk-info"><b>Most people should skip this.</b> It only adds automatic syncing — the card above already moves data, with no account.<br><br>
+      It needs an app registration in Microsoft Entra, and a <b>personal</b> Microsoft account (outlook.com, hotmail.com) cannot create one until an Azure directory exists for it — which means signing up for a free Azure account first. A work or school Microsoft 365 account can do it directly.<br><br>
+      If you have that: on your computer, <b>Setup → Phone app → Show the QR code</b>, and scan it with this phone's camera. That sets everything here.</div>
       <div class="pk-actions"><button class="pk-btn" data-act="gid">Type the sign-in ID instead</button></div></div>`;
   }
   if (!graphSignedIn()) {
@@ -33942,10 +33965,13 @@ async function _pkFindFiles(q) {
 async function _pkEnterId() {
   const c = graphCfg();
   const v = await sbForm({
-    title: 'OneDrive sign-in ID', message: 'From the app registration in Microsoft Entra (Overview page).',
-    fields: [{ name: 'id', label: 'Application (client) ID', type: 'text', value: c.clientId || '' },
-             { name: 't', label: 'Directory (tenant) ID — leave blank if the app accepts personal accounts', type: 'text', value: c.tenant && c.tenant !== 'common' ? c.tenant : '' }],
-    submitLabel: 'Save', validate: x => /^[0-9a-f-]{36}$/i.test(String(x.id || '').trim()) ? null : 'That doesn’t look like an ID (36 characters, letters, digits and dashes).'
+    title: 'OneDrive sign-in ID', message: 'From your own app registration in Microsoft Entra (its Overview page). Only the first box has to be filled in.',
+    fields: [{ name: 'id', label: 'Application (client) ID — required', type: 'text', value: c.clientId || '' },
+             { name: 't', label: 'Directory (tenant) ID — leave this EMPTY unless the registration is locked to one organisation', type: 'text', value: c.tenant && c.tenant !== 'common' ? c.tenant : '' }],
+    submitLabel: 'Save',
+    // The old wording just said "an ID", so a blank tenant looked like the
+    // culprit when the real problem was the missing client ID above it.
+    validate: x => /^[0-9a-f-]{36}$/i.test(String(x.id || '').trim()) ? null : 'The Application (client) ID doesn’t look right — it is 36 characters of letters, digits and dashes. The Directory (tenant) ID below can be left empty.'
   });
   if (!v) return;
   graphSaveCfg({ clientId: String(v.id).trim(), tenant: String(v.t || '').trim() || 'common' });
