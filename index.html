@@ -28173,7 +28173,7 @@ function renderInstallRow() {
    One constant, stamped into every page header at boot rather than written
    into four blocks of markup — so bumping it is a one-line change and the
    pages can never disagree about which version they are. */
-const APP_VERSION = 'v1.20';
+const APP_VERSION = 'v1.21';
 function stampAppVersion() {
   document.querySelectorAll('.header-actions').forEach(host => {
     let el = host.querySelector('.app-version');
@@ -28963,8 +28963,35 @@ function loadSyncFromOneDrive() {
       const isBackup = bundle && bundle._format === 'sentrybox-planner-backup' && bundle.data && typeof bundle.data === 'object';
       const isSyncBundle = bundle && typeof bundle === 'object' &&
         ('sb_mind_dump' in bundle || 'weeks' in bundle || 'sb_reminders' in bundle || 'schemaVersion' in bundle);
+
+      // A transfer file — what the phone's own Export writes, and what the
+      // Project Tracker's "Send to Weekly Planner" produces. Restore has
+      // always accepted these; this path used to turn them away, which was
+      // simply an oversight. It carries only Daily Top 3, Mind Dump and
+      // Reminders, so it is merged rather than used to replace everything.
+      if (bundle && bundle._format === 'sentrybox-mobile-transfer') {
+        _syncFileStatus('Transfer file — choose Merge or Replace on screen.', '');
+        try { await importMobileTransfer(bundle); }
+        catch (e) { _syncFileStatus('That transfer file could not be read: ' + ((e && e.message) || 'error'), 'err'); }
+        return;
+      }
+
       if (!isBackup && !isSyncBundle) {
-        _syncFileStatus('That JSON file doesn\'t look like Sentry Box data. Pick your sentrybox-sync.json or a SentryBox-Planner-Backup file.', 'err');
+        // Say what the file actually is, rather than only what it isn't.
+        if (bundle && bundle._format === 'sentrybox-project-tracker') {
+          _syncFileStatus('That is a Project Tracker backup, not planner data. Load it in the Project Tracker (Backup \u2192 Restore), not here.', 'err');
+          return;
+        }
+        let what = '';
+        try {
+          if (bundle && bundle._format) what = ' It says it is a "' + String(bundle._format).slice(0, 40) + '" file.';
+          else if (bundle && typeof bundle === 'object' && !Array.isArray(bundle)) {
+            const ks = Object.keys(bundle).slice(0, 5).join(', ');
+            if (ks) what = ' It starts with: ' + ks + '.';
+          } else if (Array.isArray(bundle)) what = ' It is a plain list, not planner data.';
+        } catch (_) {}
+        _syncFileStatus('That JSON file doesn\'t look like Sentry Box data.' + what +
+          ' On the computer press 💾 Save data to OneDrive and pick the sentrybox-sync.json it writes.', 'err');
         return;
       }
       // v1.14: say what is about to happen before replacing anything.
