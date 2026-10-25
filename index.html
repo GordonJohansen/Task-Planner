@@ -23081,7 +23081,8 @@ const BACKUP_EXCLUDE_KEYS = ['sb_cu_token', 'sb_slack_webhook', 'sb_auto_backups
   'sb_file_lock',                                                   // v1.13: this device's key for PIN-protected files
   'sb_sync_unit_base', 'sb_device_name', 'sb_device_names',         // v1.15: per-piece fingerprints; device names
   'sb_folder_backup', 'sb_folder_backup_last',                      // v1.15: weekly folder backup, per device
-  'sb_graph_cfg', 'sb_graph_tokens', 'sb_graph_pkce', 'sb_pocket_dest'];   // v1.16: this phone's OneDrive sign-in (never copied anywhere)
+  'sb_graph_cfg', 'sb_graph_tokens', 'sb_graph_pkce', 'sb_pocket_dest',   // v1.16: this phone's OneDrive sign-in (never copied anywhere)
+  'sb_save_route'];                                                 // v1.28: which route THIS device's Save takes — the phone's answer is not the computer's
 
 /* Track when the user last downloaded (or restored) a backup, so we can
    gently remind them if it's been a while. Backups only protect data if
@@ -28229,7 +28230,7 @@ function renderInstallRow() {
    One constant, stamped into every page header at boot rather than written
    into four blocks of markup — so bumping it is a one-line change and the
    pages can never disagree about which version they are. */
-const APP_VERSION = 'v1.27';
+const APP_VERSION = 'v1.28';
 function stampAppVersion() {
   document.querySelectorAll('.header-actions').forEach(host => {
     let el = host.querySelector('.app-version');
@@ -28962,6 +28963,29 @@ async function manualSyncHandle(forcePicker) {
   try { await idbSet(MANUAL_SYNC_IDB_KEY, handle); } catch (_) {}
   return handle;
 }
+/* Which route the Save button takes on this device.
+     auto  — own a file where that is possible, otherwise share
+     file  — always write over an owned file
+     share — always hand it to the share sheet
+   This is a setting because the tidiest route and the route that reaches
+   OneDrive are not the same on every device. Android's save screen often
+   offers nothing but Downloads: saving there is neat and utterly useless,
+   because nothing carries it to the computer. On such a phone the share
+   sheet is the only route that works, and 'auto' guesses wrong. */
+const SAVE_ROUTE_KEY = 'sb_save_route';
+function saveRoute() {
+  try {
+    const v = localStorage.getItem(SAVE_ROUTE_KEY);
+    return (v === 'file' || v === 'share') ? v : 'auto';
+  } catch (_) { return 'auto'; }
+}
+function setSaveRoute(v) {
+  try {
+    if (v === 'auto') localStorage.removeItem(SAVE_ROUTE_KEY);
+    else localStorage.setItem(SAVE_ROUTE_KEY, v);
+  } catch (_) {}
+}
+
 /* Hand the data to the share sheet on purpose, whatever this device can
    otherwise do. On Android the save picker often cannot reach OneDrive at
    all — it offers the phone's own storage — while the share sheet goes
@@ -29044,6 +29068,12 @@ async function forgetManualSyncHandle() {
 /* Which of the three routes this device will actually take, in plain words.
    Shown in More so there is no guessing about where a save goes. */
 function saveRouteDescription() {
+  if (saveRoute() === 'share') {
+    return { how: 'share', text: 'Save hands the file to the share sheet, so you can pick OneDrive. Each save makes <b>' + _pkEsc(xferOutName()) + '</b> — the date is the name, so saving again today reuses it.' };
+  }
+  if (saveRoute() === 'file' && !window.showSaveFilePicker) {
+    return { how: 'share', text: 'This device is set to write over a file, but it has no file picker, so Save shares instead.' };
+  }
   if (window.showSaveFilePicker) {
     return _syncFileHandle
       ? { how: 'owns', text: 'This device writes over one file: <b>' + _pkEsc(_syncFileHandle.name || SYNC_FILE_NAME) + '</b>. Nothing piles up.' }
@@ -29068,6 +29098,14 @@ async function saveSyncToOneDrive() {
   }
   // Preferred path: File System Access API (desktop Edge/Chrome). Lets the
   // user save straight into the OneDrive folder and re-save to the same file.
+  // A device told to share does not touch the file picker: on a phone whose
+  // picker only offers Downloads, owning a file means saving somewhere the
+  // computer will never see.
+  if (saveRoute() === 'share') {
+    try { if (await shareSyncCopy()) return; } catch (_) {}
+    return;
+  }
+
   if (window.showSaveFilePicker) {
     // Two passes. The first uses the remembered file; if that file has since
     // been moved, renamed or deleted, the write fails, we forget it, and the
@@ -34073,6 +34111,7 @@ function _pkClick(e) {
   if (act === 'guse') { const f = (_pkFiles || [])[parseInt(b.dataset.i, 10)]; if (f) { _pkFiles = null; graphUseFile(f).catch(err => showToast(err.message, 8000)); } return; }
   if (act === 'gid') { _pkEnterId(); return; }
   if (act === 'gout') { _pkDisconnect(); return; }
+  if (act === 'route') { setSaveRoute(b.dataset.v); pocketRender(); showToast('Saved — the Save button will ' + (b.dataset.v === 'share' ? 'send to OneDrive.' : b.dataset.v === 'file' ? 'write over a file.' : 'decide automatically.')); return; }
   if (act === 'refile') { chooseSyncFileLocation().then(() => pocketRender()); return; }
   if (act === 'sharecopy') { shareSyncCopy().catch(e => showToast('Could not share: ' + (e.message || 'error'))); return; }
   if (act === 'rename') { syncRenameDevice().then(() => pocketRender()); return; }
@@ -34277,7 +34316,9 @@ async function _pkFillFileCard() {
   el.innerHTML = d.text;
 }
 function _pkWhereCard() {
-  if (!window.showSaveFilePicker) return '';
+  // No picker means there is no owned file to locate — but the route is still
+  // worth showing, so the chooser appears on its own.
+  if (!window.showSaveFilePicker) return _pkRouteCard();
   return '<div class="pk-card"><h3>📁 Where this phone’s file is</h3>' +
     '<div class="pk-info" id="pk-filewhere">Checking…</div>' +
     '<div class="pk-info" style="margin-top:8px">Android does not tell the planner which folder you picked — only the ' +
@@ -34288,7 +34329,26 @@ function _pkWhereCard() {
     'and choose <b>OneDrive</b> before saving. If OneDrive is not listed there, your Android cannot save into it ' +
     'directly — use <b>Send a copy to OneDrive</b> instead, which goes through the OneDrive app and always works.</div>' +
     '<div class="pk-actions"><button class="pk-btn navy" data-act="refile">Save somewhere else</button>' +
-    '<button class="pk-btn gold" data-act="sharecopy">Send a copy to OneDrive</button></div></div>';
+    '<button class="pk-btn gold" data-act="sharecopy">Send a copy to OneDrive</button></div></div>' +
+    _pkRouteCard();
+}
+/* If the save screen on this phone offers nothing but Downloads, owning a
+   file is the wrong route however tidy it is, and no amount of explaining
+   fixes that — the button has to do something else. */
+function _pkRouteCard() {
+  const r = saveRoute();
+  const opt = (v, label, note) =>
+    '<button class="pk-btn' + (r === v ? ' gold' : '') + '" data-act="route" data-v="' + v + '" ' +
+    'style="text-align:left;flex:1 1 100%;margin-bottom:6px">' + (r === v ? '✓ ' : '') + label +
+    '<span style="display:block;font-weight:400;font-size:11.5px;opacity:.85;margin-top:2px">' + note + '</span></button>';
+  return '<div class="pk-card"><h3>⚙ What the Save button does here</h3>' +
+    '<div class="pk-info">If OneDrive is not offered on the save screen, choose the second one. ' +
+    'This is remembered for this device only — it is never carried to your computer.</div>' +
+    '<div class="pk-actions" style="flex-wrap:wrap">' +
+    opt('auto', 'Decide automatically', 'Own a file where that works, otherwise share. The default.') +
+    opt('share', 'Always send to OneDrive', 'Skip the save screen and go straight to the share sheet. One file per day.') +
+    opt('file', 'Always write over a file', 'Keeps one file and never adds another — only useful if the save screen can reach OneDrive.') +
+    '</div></div>';
 }
 function _pkTransferCard() {
   // The buttons moved to the bar at the top of every tab; what is left here
