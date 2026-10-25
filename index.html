@@ -28229,7 +28229,7 @@ function renderInstallRow() {
    One constant, stamped into every page header at boot rather than written
    into four blocks of markup — so bumping it is a one-line change and the
    pages can never disagree about which version they are. */
-const APP_VERSION = 'v1.26';
+const APP_VERSION = 'v1.27';
 function stampAppVersion() {
   document.querySelectorAll('.header-actions').forEach(host => {
     let el = host.querySelector('.app-version');
@@ -28962,6 +28962,81 @@ async function manualSyncHandle(forcePicker) {
   try { await idbSet(MANUAL_SYNC_IDB_KEY, handle); } catch (_) {}
   return handle;
 }
+/* Hand the data to the share sheet on purpose, whatever this device can
+   otherwise do. On Android the save picker often cannot reach OneDrive at
+   all — it offers the phone's own storage — while the share sheet goes
+   through the OneDrive app itself, which always can. So the tidy route and
+   the route that reaches OneDrive are not always the same route, and this
+   makes the second one available on its own. */
+async function shareSyncCopy() {
+  let json;
+  try {
+    const bundle = buildSyncBundle();
+    json = await encWrapForFile(bundle, 'data', { updatedAt: bundle.updatedAt, updatedBy: bundle.updatedBy });
+  } catch (e) { showToast('⚠ Could not gather data: ' + (e.message || 'error')); return false; }
+  const outName = xferOutName();
+  try {
+    const file = new File([json], outName, { type: 'application/json' });
+    if (navigator.canShare && navigator.share && navigator.canShare({ files: [file] })) {
+      await navigator.share({ files: [file], title: outName });
+      xferRemember('save', outName);
+      try { renderXferStatus(); } catch (_) {}
+      showToast('✓ Sent as ' + outName + ' — choose OneDrive from the list', 8000);
+      return true;
+    }
+  } catch (e) {
+    if (e && (e.name === 'AbortError' || e.name === 'NotAllowedError')) { showToast('Nothing was sent.'); return false; }
+  }
+  // No share sheet: fall back to a download, same as Save does.
+  try {
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = outName;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1500);
+    xferRemember('save', outName);
+    try { renderXferStatus(); } catch (_) {}
+    showToast('✓ Downloaded ' + outName + ' — move it into OneDrive', 8000);
+    return true;
+  } catch (e) { showToast('⚠ Could not share the file: ' + (e.message || 'error')); return false; }
+}
+
+/* Pick a different file to save into. Without this, v1.26's remembering was
+   a one-way door: choose the Downloads folder once by accident and there was
+   no way back to the picker. */
+async function chooseSyncFileLocation() {
+  if (!window.showSaveFilePicker) {
+    showToast('This device has no file picker — Save shares the file instead.', 6000);
+    return false;
+  }
+  await forgetManualSyncHandle();
+  try {
+    await saveSyncToOneDrive();   // no remembered file now, so this asks for one
+    return true;
+  } catch (_) { return false; }
+}
+
+/* Read the saved file back and report what is actually on disk. The browser
+   will not reveal the folder — a handle has a name and nothing more — but
+   confirming the size and the time proves the write happened and that this
+   is the file being written, which is most of what people want to know. */
+async function describeSavedFile() {
+  if (!_syncFileHandle) {
+    try { _syncFileHandle = (await idbGet(MANUAL_SYNC_IDB_KEY)) || null; } catch (_) {}
+  }
+  if (!_syncFileHandle) return { ok: false, text: 'This device has not saved to a file it owns yet.' };
+  try {
+    const f = await _syncFileHandle.getFile();
+    const when = new Date(f.lastModified).toLocaleString('en-CA', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+    return { ok: true, name: f.name, size: f.size, when: when,
+      // No trailing full stop: the locale already ends the time with "p.m."
+      text: '<b>' + _pkEsc(f.name) + '</b> — ' + f.size.toLocaleString() + ' bytes, last written ' + _pkEsc(when) };
+  } catch (e) {
+    return { ok: false, text: 'The remembered file could not be read — it may have been moved or deleted. Use “Save somewhere else” to choose it again.' };
+  }
+}
+
 async function forgetManualSyncHandle() {
   _syncFileHandle = null;
   try { await idbSet(MANUAL_SYNC_IDB_KEY, null); } catch (_) {}
@@ -29013,7 +29088,12 @@ async function saveSyncToOneDrive() {
         await writable.close();
         _syncFileHandle = handle;
         xferRemember('save', handle.name || SYNC_FILE_NAME);
-        showToast('✓ Saved to ' + (handle.name || SYNC_FILE_NAME) + ' — it will sync to your devices');
+        // Deliberately does NOT say "it will sync". A file handle carries a
+        // name and nothing else — no folder, no path — so the app has no way
+        // to know whether the place you chose is inside OneDrive or just the
+        // phone's Downloads folder. Claiming it synced sent someone looking
+        // in OneDrive for a file that was sitting on the phone.
+        showToast('✓ Written to ' + (handle.name || SYNC_FILE_NAME) + ' — wherever you chose to put it', 6000);
         try { renderXferStatus(); } catch (_) {}
         return;
       } catch (e) {
@@ -33993,6 +34073,8 @@ function _pkClick(e) {
   if (act === 'guse') { const f = (_pkFiles || [])[parseInt(b.dataset.i, 10)]; if (f) { _pkFiles = null; graphUseFile(f).catch(err => showToast(err.message, 8000)); } return; }
   if (act === 'gid') { _pkEnterId(); return; }
   if (act === 'gout') { _pkDisconnect(); return; }
+  if (act === 'refile') { chooseSyncFileLocation().then(() => pocketRender()); return; }
+  if (act === 'sharecopy') { shareSyncCopy().catch(e => showToast('Could not share: ' + (e.message || 'error'))); return; }
   if (act === 'rename') { syncRenameDevice().then(() => pocketRender()); return; }
   if (act === 'install') { promptInstall(); return; }
   if (act === 'check') { pocketSyncTap(); return; }
@@ -34170,6 +34252,8 @@ function _pkMore() {
       newest one. Nothing you have typed is affected.</div>
     <div class="pk-actions"><button class="pk-btn navy" data-act="update">Check for a new version</button></div></div>`;
   h += _pkTransferCard();
+  h += _pkWhereCard();
+  setTimeout(() => { _pkFillFileCard().catch(() => {}); }, 0);
   h += _pkOneDriveCard();
   // Install
   if (installSupported() && !isInstalled()) {
@@ -34185,6 +34269,27 @@ function _pkMore() {
    above the OneDrive card because automatic sync needs an app registration
    that a personal Microsoft account cannot create without first setting up
    an Azure directory. */
+/* Rendered empty, then filled once the file has been read back. */
+async function _pkFillFileCard() {
+  const el = document.getElementById('pk-filewhere');
+  if (!el) return;
+  const d = await describeSavedFile();
+  el.innerHTML = d.text;
+}
+function _pkWhereCard() {
+  if (!window.showSaveFilePicker) return '';
+  return '<div class="pk-card"><h3>📁 Where this phone’s file is</h3>' +
+    '<div class="pk-info" id="pk-filewhere">Checking…</div>' +
+    '<div class="pk-info" style="margin-top:8px">Android does not tell the planner which folder you picked — only the ' +
+    'file’s name. If it is not turning up in OneDrive, it almost certainly went to the phone’s own ' +
+    '<b>Downloads</b> folder, which is what the save screen offers first. Open the phone’s <b>Files</b> app and ' +
+    'look in Downloads to confirm.<br><br>' +
+    'To put it in OneDrive instead, tap <b>Save somewhere else</b> below, then in the save screen open the ☰ menu ' +
+    'and choose <b>OneDrive</b> before saving. If OneDrive is not listed there, your Android cannot save into it ' +
+    'directly — use <b>Send a copy to OneDrive</b> instead, which goes through the OneDrive app and always works.</div>' +
+    '<div class="pk-actions"><button class="pk-btn navy" data-act="refile">Save somewhere else</button>' +
+    '<button class="pk-btn gold" data-act="sharecopy">Send a copy to OneDrive</button></div></div>';
+}
 function _pkTransferCard() {
   // The buttons moved to the bar at the top of every tab; what is left here
   // is the explanation of how the round trip works.
