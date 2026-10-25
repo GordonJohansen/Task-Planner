@@ -23082,7 +23082,7 @@ const BACKUP_EXCLUDE_KEYS = ['sb_cu_token', 'sb_slack_webhook', 'sb_auto_backups
   'sb_sync_unit_base', 'sb_device_name', 'sb_device_names',         // v1.15: per-piece fingerprints; device names
   'sb_folder_backup', 'sb_folder_backup_last',                      // v1.15: weekly folder backup, per device
   'sb_graph_cfg', 'sb_graph_tokens', 'sb_graph_pkce', 'sb_pocket_dest',   // v1.16: this phone's OneDrive sign-in (never copied anywhere)
-  'sb_save_route'];                                                 // v1.28: which route THIS device's Save takes — the phone's answer is not the computer's
+  'sb_save_route', 'sb_last_save_try'];                                                 // v1.28: which route THIS device's Save takes — the phone's answer is not the computer's
 
 /* Track when the user last downloaded (or restored) a backup, so we can
    gently remind them if it's been a while. Backups only protect data if
@@ -28230,7 +28230,7 @@ function renderInstallRow() {
    One constant, stamped into every page header at boot rather than written
    into four blocks of markup — so bumping it is a one-line change and the
    pages can never disagree about which version they are. */
-const APP_VERSION = 'v1.29';
+const APP_VERSION = 'v1.30';
 function stampAppVersion() {
   document.querySelectorAll('.header-actions').forEach(host => {
     let el = host.querySelector('.app-version');
@@ -29009,7 +29009,19 @@ function shareFileNow(json, name) {
 /* Say what actually went wrong. Collapsing every failure into "Nothing was
    sent" hid the difference between a person closing the sheet and Android
    refusing outright, which are opposite problems. */
+/* Five rounds of this went by on inference because nothing kept a record of
+   what the phone actually did. Every save attempt now leaves one. */
+const SAVE_LOG_KEY = 'sb_last_save_try';
+function logSaveTry(stage, detail) {
+  try {
+    localStorage.setItem(SAVE_LOG_KEY, JSON.stringify({
+      at: new Date().toISOString(), stage: stage, detail: String(detail || '').slice(0, 200)
+    }));
+  } catch (_) {}
+}
+
 function shareFailed(e) {
+  logSaveTry('share-failed', ((e && e.name) || 'error') + ': ' + ((e && e.message) || ''));
   const n = (e && e.name) || '';
   if (n === 'AbortError') { showToast('Nothing was sent — the sharing panel was closed.', 5000); return; }
   if (n === 'NotAllowedError') {
@@ -29020,6 +29032,7 @@ function shareFailed(e) {
 }
 
 function shareDone(name) {
+  logSaveTry('shared-ok', name);
   xferRemember('save', name);
   try { renderXferStatus(); } catch (_) {}
   showToast('✓ Sent as ' + name + ' — choose OneDrive from the list', 8000);
@@ -29038,9 +29051,13 @@ function downloadSyncCopy(json, name) {
     setTimeout(() => URL.revokeObjectURL(url), 1500);
     xferRemember('save', name);
     try { renderXferStatus(); } catch (_) {}
+    logSaveTry('downloaded', name);
     showToast('✓ Downloaded ' + name + ' — open Files → Downloads and move it to OneDrive', 11000);
     return true;
-  } catch (e) { showToast('⚠ Could not save the file: ' + (e.message || 'error')); return false; }
+  } catch (e) {
+    logSaveTry('download-failed', (e && e.name) + ': ' + (e && e.message));
+    showToast('⚠ Could not save the file: ' + (e.message || 'error')); return false;
+  }
 }
 
 /* Hand the data to the share sheet on purpose, whatever this device can
@@ -29050,6 +29067,7 @@ function downloadSyncCopy(json, name) {
    reaches OneDrive are not always the same route. */
 function shareSyncCopy(forceDownload) {
   const name = xferOutName();
+  logSaveTry('start', forceDownload ? 'download requested' : 'share requested');
 
   // Fast path: no encryption, so the payload is built synchronously and the
   // share happens in the same turn as the tap, with the activation intact.
@@ -29088,6 +29106,96 @@ function shareSyncCopy(forceDownload) {
       shareFailed(e); return false;
     }
   })();
+}
+
+/* Everything I would otherwise have to ask for, in one block of text the
+   phone can put on the clipboard. */
+function buildDiagnostics() {
+  const L = [];
+  const yn = v => v ? 'yes' : 'no';
+  L.push('SENTRY BOX PLANNER — SAVE DIAGNOSTICS');
+  L.push('taken ' + new Date().toLocaleString('en-CA'));
+  L.push('version ' + APP_VERSION);
+  L.push('');
+  L.push('THIS DEVICE');
+  L.push('  address      ' + location.origin + location.pathname);
+  L.push('  installed    ' + yn(window.matchMedia && window.matchMedia('(display-mode: standalone)').matches));
+  L.push('  browser      ' + (navigator.userAgent || '').slice(0, 160));
+  L.push('');
+  L.push('WHAT THIS BROWSER OFFERS');
+  L.push('  save picker  ' + yn(!!window.showSaveFilePicker));
+  L.push('  share        ' + yn(!!navigator.share));
+  L.push('  share files  ' + yn(!!(navigator.canShare && (function () {
+    try { return navigator.canShare({ files: [new File(['x'], 'a.json', { type: 'application/json' })] }); }
+    catch (_) { return false; }
+  })())));
+  L.push('  clipboard    ' + yn(!!(navigator.clipboard && navigator.clipboard.writeText)));
+  L.push('');
+  L.push('SETTINGS');
+  L.push('  save route   ' + saveRoute());
+  L.push('  PIN-locked   ' + yn((function(){ try { return encIsOn(); } catch(_) { return false; } })()));
+  let owned = '(none)';
+  try { owned = (_syncFileHandle && _syncFileHandle.name) || '(none)'; } catch (_) {}
+  L.push('  owned file   ' + owned);
+  L.push('');
+  L.push('LAST SAVE ATTEMPT');
+  try {
+    const r = JSON.parse(localStorage.getItem(SAVE_LOG_KEY) || 'null');
+    if (!r) L.push('  (nothing recorded on this device)');
+    else {
+      L.push('  when         ' + new Date(r.at).toLocaleString('en-CA'));
+      L.push('  got as far as ' + r.stage);
+      L.push('  detail       ' + r.detail);
+    }
+  } catch (_) { L.push('  (unreadable)'); }
+  L.push('');
+  L.push('LAST COMPLETED TRANSFER');
+  try {
+    const x = JSON.parse(localStorage.getItem(XFER_LAST_KEY) || 'null');
+    L.push(x ? '  ' + x.dir + ' — ' + (x.name || '(unnamed)') + ' — ' + new Date(x.at).toLocaleString('en-CA')
+             : '  (none on this device)');
+  } catch (_) { L.push('  (unreadable)'); }
+  L.push('');
+  L.push('DATA SIZE');
+  try {
+    const n = JSON.stringify(buildSyncBundle()).length;
+    L.push('  sync file    ' + n.toLocaleString() + ' bytes');
+  } catch (e) { L.push('  could not build the bundle: ' + ((e && e.message) || 'error')); }
+  return L.join('\n');
+}
+
+function copyDiagnostics() {
+  const text = buildDiagnostics();
+  const done = () => showToast('✓ Copied. Paste it into the chat.', 7000);
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done).catch(() => _pkShowText(text));
+      return;
+    }
+  } catch (_) {}
+  _pkShowText(text);
+}
+
+/* If the clipboard is refused, show the text so it can be selected by hand. */
+function _pkShowText(text) {
+  let w = document.getElementById('pk-diagbox');
+  if (!w) {
+    w = document.createElement('div');
+    w.id = 'pk-diagbox';
+    w.style.cssText = 'position:fixed;inset:6% 4%;z-index:99999;background:#fff;border:2px solid #29549B;' +
+      'border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:8px';
+    document.body.appendChild(w);
+  }
+  w.innerHTML = '';
+  const ta = document.createElement('textarea');
+  ta.readOnly = true; ta.value = text;
+  ta.style.cssText = 'flex:1;width:100%;font:12px/1.35 monospace;border:1px solid #ccc;border-radius:6px;padding:8px';
+  const btn = document.createElement('button');
+  btn.textContent = 'Close';
+  btn.style.cssText = 'padding:10px;border:0;border-radius:8px;background:#29549B;color:#fff;font-size:15px';
+  btn.onclick = () => w.remove();
+  w.appendChild(ta); w.appendChild(btn);
+  try { ta.focus(); ta.select(); } catch (_) {}
 }
 
 /* A deliberately trivial share, called with nothing awaited beforehand. If
@@ -34162,6 +34270,7 @@ function _pkClick(e) {
   if (act === 'guse') { const f = (_pkFiles || [])[parseInt(b.dataset.i, 10)]; if (f) { _pkFiles = null; graphUseFile(f).catch(err => showToast(err.message, 8000)); } return; }
   if (act === 'gid') { _pkEnterId(); return; }
   if (act === 'gout') { _pkDisconnect(); return; }
+  if (act === 'diag') { copyDiagnostics(); return; }
   if (act === 'sharetest') { testSharing(); return; }
   if (act === 'dlcopy') { shareSyncCopy(true); return; }
   if (act === 'route') { setSaveRoute(b.dataset.v); pocketRender(); showToast('Saved — the Save button will ' + (b.dataset.v === 'share' ? 'send to OneDrive.' : b.dataset.v === 'file' ? 'write over a file.' : 'decide automatically.')); return; }
@@ -34406,7 +34515,8 @@ function _pkRouteCard() {
     'data out anyway. A downloaded file can be moved into OneDrive from the phone’s <b>Files</b> app — the ' +
     'open side of Android reaches OneDrive even where the save side does not.</div>' +
     '<div class="pk-actions"><button class="pk-btn" data-act="sharetest">Test sharing</button>' +
-    '<button class="pk-btn navy" data-act="dlcopy">Download instead</button></div></div>';
+    '<button class="pk-btn navy" data-act="dlcopy">Download instead</button>' +
+    '<button class="pk-btn gold" data-act="diag" style="flex:1 1 100%">Copy diagnostics</button></div></div>';
 }
 function _pkTransferCard() {
   // The buttons moved to the bar at the top of every tab; what is left here
