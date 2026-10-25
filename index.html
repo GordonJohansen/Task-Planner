@@ -28229,7 +28229,7 @@ function renderInstallRow() {
    One constant, stamped into every page header at boot rather than written
    into four blocks of markup — so bumping it is a one-line change and the
    pages can never disagree about which version they are. */
-const APP_VERSION = 'v1.25';
+const APP_VERSION = 'v1.26';
 function stampAppVersion() {
   document.querySelectorAll('.header-actions').forEach(host => {
     let el = host.querySelector('.app-version');
@@ -28913,12 +28913,72 @@ const SYNC_FILE_NAME = 'sentrybox-sync.json';
    therefore stamped with the date and time, so it never collides and the
    newest is obvious at a glance. */
 function xferOutName() {
+  // Date only, deliberately. A phone that cannot own a file has to create a
+  // new one each time, and nothing in the browser can delete the last one —
+  // so the name is what keeps the pile small. Saving five times on Friday
+  // reuses Friday's name, which OneDrive either replaces or keeps once more,
+  // instead of leaving five files behind.
   const d = new Date();
   const p = n => String(n).padStart(2, '0');
-  return 'sentrybox-sync-' + d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) +
-         '-' + p(d.getHours()) + p(d.getMinutes()) + '.json';
+  return 'sentrybox-sync-' + d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + '.json';
 }
-let _syncFileHandle = null;   // remembered File System Access handle (desktop)
+/* The file the Save button writes to.
+   This used to be an ordinary variable, which meant it was forgotten the
+   moment the app was closed: every session's first Save asked for the file
+   again, and on a phone — which until recently had no file picker at all —
+   every Save created a brand new file that nothing could ever tidy up.
+   The app already keeps folder handles in IndexedDB; the Save button simply
+   was not using it. Now it does, under its own key, so the chosen file is
+   remembered for good and written over in place. Its own key, not the one
+   the full OneDrive sync uses, so that picking a file here cannot switch
+   automatic syncing on behind the scenes. */
+let _syncFileHandle = null;
+const MANUAL_SYNC_IDB_KEY = 'manualSyncFile';
+
+async function manualSyncHandle(forcePicker) {
+  if (!forcePicker) {
+    if (!_syncFileHandle) {
+      try { _syncFileHandle = (await idbGet(MANUAL_SYNC_IDB_KEY)) || null; } catch (_) { _syncFileHandle = null; }
+    }
+    if (_syncFileHandle) {
+      // A remembered handle still needs permission, and the browser may ask
+      // again after a restart. This runs inside the Save click, so it is
+      // allowed to prompt.
+      let perm = 'granted';
+      try {
+        if (_syncFileHandle.queryPermission) perm = await _syncFileHandle.queryPermission({ mode: 'readwrite' });
+        if (perm !== 'granted' && _syncFileHandle.requestPermission) perm = await _syncFileHandle.requestPermission({ mode: 'readwrite' });
+      } catch (_) { perm = 'denied'; }
+      if (perm === 'granted') return _syncFileHandle;
+      _syncFileHandle = null;   // refused — ask for the file instead of failing
+    }
+  }
+  const handle = await window.showSaveFilePicker({
+    id: 'sentrybox-sync-manual',
+    suggestedName: SYNC_FILE_NAME,
+    types: [{ description: 'Sentry Box data', accept: { 'application/json': ['.json'] } }]
+  });
+  _syncFileHandle = handle;
+  try { await idbSet(MANUAL_SYNC_IDB_KEY, handle); } catch (_) {}
+  return handle;
+}
+async function forgetManualSyncHandle() {
+  _syncFileHandle = null;
+  try { await idbSet(MANUAL_SYNC_IDB_KEY, null); } catch (_) {}
+}
+/* Which of the three routes this device will actually take, in plain words.
+   Shown in More so there is no guessing about where a save goes. */
+function saveRouteDescription() {
+  if (window.showSaveFilePicker) {
+    return _syncFileHandle
+      ? { how: 'owns', text: 'This device writes over one file: <b>' + _pkEsc(_syncFileHandle.name || SYNC_FILE_NAME) + '</b>. Nothing piles up.' }
+      : { how: 'can-own', text: 'This device can own a file. The first Save asks you which one; every Save after that writes over it, so nothing piles up.' };
+  }
+  if (navigator.canShare && navigator.share) {
+    return { how: 'share', text: 'This device cannot write over a file — sharing always makes a new one — so each Save creates <b>' + _pkEsc(xferOutName()) + '</b>. The date is the name, so saving again today reuses it rather than adding another.' };
+  }
+  return { how: 'download', text: 'Each Save downloads <b>' + _pkEsc(xferOutName()) + '</b> to this device, for you to move into OneDrive. The date is the name, so saving again today reuses it.' };
+}
 
 /* Save the current planner data to a JSON file the devices can share. */
 async function saveSyncToOneDrive() {
@@ -28934,23 +28994,33 @@ async function saveSyncToOneDrive() {
   // Preferred path: File System Access API (desktop Edge/Chrome). Lets the
   // user save straight into the OneDrive folder and re-save to the same file.
   if (window.showSaveFilePicker) {
-    try {
-      if (!_syncFileHandle) {
-        _syncFileHandle = await window.showSaveFilePicker({
-          suggestedName: SYNC_FILE_NAME,
-          types: [{ description: 'Sentry Box data', accept: { 'application/json': ['.json'] } }]
-        });
+    // Two passes. The first uses the remembered file; if that file has since
+    // been moved, renamed or deleted, the write fails, we forget it, and the
+    // second pass asks for a file rather than silently dumping a new one in
+    // the Downloads folder.
+    for (let attempt = 0; attempt < 2; attempt++) {
+      let handle = null;
+      try {
+        handle = await manualSyncHandle(attempt === 1);
+      } catch (e) {
+        if (e && (e.name === 'AbortError' || e.name === 'NotAllowedError')) return;  // cancelled: a decision, not a failure
+        break;                                                                        // no usable picker after all
       }
-      const writable = await _syncFileHandle.createWritable();
-      await writable.write(json);
-      await writable.close();
-      xferRemember('save', (_syncFileHandle && _syncFileHandle.name) || SYNC_FILE_NAME);
-      showToast('✓ Saved to OneDrive — it will sync to your devices');
-      return;
-    } catch (e) {
-      if (e && e.name === 'AbortError') return;   // user cancelled the picker
-      // Any other failure (e.g. file:// blocks the API) → fall through to download.
-      _syncFileHandle = null;
+      if (!handle) break;
+      try {
+        const writable = await handle.createWritable();
+        await writable.write(json);
+        await writable.close();
+        _syncFileHandle = handle;
+        xferRemember('save', handle.name || SYNC_FILE_NAME);
+        showToast('✓ Saved to ' + (handle.name || SYNC_FILE_NAME) + ' — it will sync to your devices');
+        try { renderXferStatus(); } catch (_) {}
+        return;
+      } catch (e) {
+        await forgetManualSyncHandle();
+        if (attempt === 1) break;   // asked once already; fall through to share/download
+        showToast('That file is no longer there — choose it again.', 5000);
+      }
     }
   }
   // A phone has no save picker, so the download below lands silently in the
@@ -34125,13 +34195,12 @@ function _pkTransferCard() {
     'then tap <b>📥 Load</b> up top and pick <b>sentrybox-sync.json</b>.<br><br>' +
     '<b>To send this phone’s changes back:</b> tap <b>💾 Save</b> up top, put that file in ' +
     'OneDrive, then press <b>📥 Load data from file</b> on the computer.<br><br>' +
-    '<b>Why the two files have different names.</b> The computer owns one file, ' +
-    '<b>sentrybox-sync.json</b>, and writes over it every time. A phone cannot write over ' +
-    'a file that way — sharing always creates a new one — so this phone stamps its file ' +
-    'with the date and time, like <b>sentrybox-sync-2026-10-24-1532.json</b>. That is why ' +
-    'saving here never changes the computer’s file, and why you must pick the stamped one ' +
-    'on the computer. The newest date is always the right one, and the line beside ' +
-    '💾 Save names the exact file this phone last wrote.<br><br>' +
+    '<b>How this phone saves:</b> ' + saveRouteDescription().text + '<br><br>' +
+    'The computer keeps its own file, <b>sentrybox-sync.json</b>, and writes over it every ' +
+    'time. If this phone owns a file too, give it a different name — ' +
+    '<b>sentrybox-from-phone.json</b> is a good one — so the two never fight over which ' +
+    'is which. The line beside 💾 Save always names the exact file this phone last ' +
+    'wrote, and in OneDrive the newest date is always the right one.<br><br>' +
     'Loading replaces what is on the device, so send your changes before loading. ' +
     'The line beside those buttons says whether this device has changed since its last transfer.</div></div>';
 }
