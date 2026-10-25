@@ -23954,6 +23954,24 @@ async function importMobileTransfer(t) {
         cur[g] = list;
       });
       saveMindDump(cur, true);
+
+      /* v1.34: write the Daily Top 3 day record too.
+
+         The Top 3 lives in two places: sb_mind_dump.dailyTop3 is the working
+         copy for the day on display, and sb_daily3_by_date holds one list per
+         day. Every edit inside the app updates both. An import updated only
+         the working copy, so the next loadDaily3ForDate() — which a reload
+         performs — restored this day from the by-date map and wiped what had
+         just been imported. On screen that is the imported rows appearing
+         correctly and then going blank a moment later. The comment above
+         _d3WriteDayRecord's call site names this exact failure as the root
+         cause of "Top 3 items appear, then disappear"; the importer was
+         simply not among the paths that had been taught to flush. */
+      try {
+        if (t.mindDump && Array.isArray(t.mindDump.dailyTop3)) {
+          _d3WriteDayRecord(getCurrentDaily3Date(), Array.isArray(cur.dailyTop3) ? cur.dailyTop3 : []);
+        }
+      } catch (e) { console.warn('Daily3 day-record flush after import failed:', e); }
     }
     // Reminders
     if (t.reminders && typeof t.reminders === 'object') {
@@ -28277,7 +28295,7 @@ function renderInstallRow() {
    One constant, stamped into every page header at boot rather than written
    into four blocks of markup — so bumping it is a one-line change and the
    pages can never disagree about which version they are. */
-const APP_VERSION = 'v1.33';
+const APP_VERSION = 'v1.34';
 function stampAppVersion() {
   document.querySelectorAll('.header-actions').forEach(host => {
     let el = host.querySelector('.app-version');
