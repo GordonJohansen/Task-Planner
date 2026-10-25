@@ -28230,7 +28230,7 @@ function renderInstallRow() {
    One constant, stamped into every page header at boot rather than written
    into four blocks of markup — so bumping it is a one-line change and the
    pages can never disagree about which version they are. */
-const APP_VERSION = 'v1.31';
+const APP_VERSION = 'v1.32';
 function stampAppVersion() {
   document.querySelectorAll('.header-actions').forEach(host => {
     let el = host.querySelector('.app-version');
@@ -29129,7 +29129,27 @@ function buildPhoneTransfer() {
     t.mindDump = {};
     MIND_DUMP_GROUPS.forEach(g => { if (Array.isArray(md[g])) t.mindDump[g] = md[g]; });
   } catch (_) {}
-  try { t.reminders = loadReminders(); } catch (_) {}
+  try {
+    // The receiving side drops any reminder without an id, by design — an
+    // item it cannot identify cannot be merged safely. That silently loses
+    // anything whose id went missing along the way, with no error anywhere,
+    // so stamp one on before sending rather than trusting every path that
+    // might have created it.
+    const r = loadReminders();
+    const stamp = (list, p) => (Array.isArray(list) ? list : []).map(x => {
+      if (!x || typeof x !== 'object' || Array.isArray(x)) return x;
+      if (typeof x.id === 'string' && x.id) return x;
+      return Object.assign({}, x, { id: p + Date.now().toString(36) + Math.random().toString(36).slice(2, 6) });
+    });
+    t.reminders = {
+      business: stamp(r.business, 'rb_'),
+      personal: stamp(r.personal, 'rp_'),
+      headings: {
+        business: stamp(r.headings && r.headings.business, 'rh_'),
+        personal: stamp(r.headings && r.headings.personal, 'rh_')
+      }
+    };
+  } catch (_) {}
   return t;
 }
 
