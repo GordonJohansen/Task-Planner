@@ -28230,7 +28230,7 @@ function renderInstallRow() {
    One constant, stamped into every page header at boot rather than written
    into four blocks of markup — so bumping it is a one-line change and the
    pages can never disagree about which version they are. */
-const APP_VERSION = 'v1.30';
+const APP_VERSION = 'v1.31';
 function stampAppVersion() {
   document.querySelectorAll('.header-actions').forEach(host => {
     let el = host.querySelector('.app-version');
@@ -29108,6 +29108,57 @@ function shareSyncCopy(forceDownload) {
   })();
 }
 
+/* The small transfer: only the things a phone actually edits.
+
+   The full sync bundle carries every week and every quarter — on a planner
+   in real use that is a couple of hundred kilobytes, and a phone never
+   changes any of it. This carries the Daily Top 3, the Mind Dump and the
+   reminders, which is everything the pocket screens can touch, and comes to
+   a small fraction of the size.
+
+   It is the 'sentrybox-mobile-transfer' format the planner has read for
+   years: the computer merges it rather than replacing everything, asks
+   first, leaves weeks and quarters untouched, and keeps reminder dates and
+   stars on items it already has. Nothing on the computer can be lost to it,
+   which is the opposite of the full bundle. */
+function buildPhoneTransfer() {
+  const t = { _format: 'sentrybox-mobile-transfer', _exportedAt: new Date().toISOString(),
+              _from: (function(){ try { return syncDeviceName(); } catch (_) { return 'phone'; } })() };
+  try {
+    const md = loadMindDump();
+    t.mindDump = {};
+    MIND_DUMP_GROUPS.forEach(g => { if (Array.isArray(md[g])) t.mindDump[g] = md[g]; });
+  } catch (_) {}
+  try { t.reminders = loadReminders(); } catch (_) {}
+  return t;
+}
+
+function transferOutName() {
+  const d = new Date();
+  const p = n => String(n).padStart(2, '0');
+  return 'sentrybox-phone-' + d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + '.json';
+}
+
+/* Share just the changes. Built and shared in the same turn as the tap. */
+function sharePhoneChanges(forceDownload) {
+  const name = transferOutName();
+  let json;
+  try { json = JSON.stringify(buildPhoneTransfer()); }
+  catch (e) { showToast('⚠ Could not gather the changes: ' + (e.message || 'error')); return Promise.resolve(false); }
+  logSaveTry('start-small', json.length + ' bytes');
+  if (forceDownload) return Promise.resolve(downloadSyncCopy(json, name));
+  let p = null;
+  try { p = shareFileNow(json, name); }
+  catch (e) { shareFailed(e); return Promise.resolve(false); }
+  if (!p) return Promise.resolve(downloadSyncCopy(json, name));
+  return p.then(() => { shareDone(name); return true; })
+          .catch(e => {
+            shareFailed(e);
+            showToast('Sharing refused again, with only ' + Math.round(json.length / 1024) + ' KB — so it is not the size. Downloading instead.', 9000);
+            return downloadSyncCopy(json, name);
+          });
+}
+
 /* Everything I would otherwise have to ask for, in one block of text the
    phone can put on the clipboard. */
 function buildDiagnostics() {
@@ -29159,7 +29210,9 @@ function buildDiagnostics() {
   L.push('DATA SIZE');
   try {
     const n = JSON.stringify(buildSyncBundle()).length;
-    L.push('  sync file    ' + n.toLocaleString() + ' bytes');
+    L.push('  whole planner ' + n.toLocaleString() + ' bytes');
+    const s = JSON.stringify(buildPhoneTransfer()).length;
+    L.push('  changes only  ' + s.toLocaleString() + ' bytes');
   } catch (e) { L.push('  could not build the bundle: ' + ((e && e.message) || 'error')); }
   return L.join('\n');
 }
@@ -34270,6 +34323,7 @@ function _pkClick(e) {
   if (act === 'guse') { const f = (_pkFiles || [])[parseInt(b.dataset.i, 10)]; if (f) { _pkFiles = null; graphUseFile(f).catch(err => showToast(err.message, 8000)); } return; }
   if (act === 'gid') { _pkEnterId(); return; }
   if (act === 'gout') { _pkDisconnect(); return; }
+  if (act === 'sendsmall') { sharePhoneChanges(false); return; }
   if (act === 'diag') { copyDiagnostics(); return; }
   if (act === 'sharetest') { testSharing(); return; }
   if (act === 'dlcopy') { shareSyncCopy(true); return; }
@@ -34514,6 +34568,11 @@ function _pkRouteCard() {
     '<div class="pk-info" style="margin-top:10px">If sharing will not open at all, these two tell you why and get the ' +
     'data out anyway. A downloaded file can be moved into OneDrive from the phone’s <b>Files</b> app — the ' +
     'open side of Android reaches OneDrive even where the save side does not.</div>' +
+    '<div class="pk-info" style="margin-top:10px"><b>If a save is refused, try this first.</b> It sends only the ' +
+    'Daily Top 3, Mind Dump and reminders — everything these phone screens can change — instead of the whole ' +
+    'planner, so it is a small fraction of the size. The computer merges it and asks first; your weeks and ' +
+    'quarters there are not touched, and nothing on the computer can be lost to it.</div>' +
+    '<div class="pk-actions"><button class="pk-btn gold" data-act="sendsmall" style="flex:1 1 100%">Send just my changes</button></div>' +
     '<div class="pk-actions"><button class="pk-btn" data-act="sharetest">Test sharing</button>' +
     '<button class="pk-btn navy" data-act="dlcopy">Download instead</button>' +
     '<button class="pk-btn gold" data-act="diag" style="flex:1 1 100%">Copy diagnostics</button></div></div>';
