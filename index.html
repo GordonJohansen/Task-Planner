@@ -22862,10 +22862,11 @@ function getDeviceId() {
    question that matters: has anything changed HERE since? A timestamp
    alone cannot — it says when, not whether it still matters. */
 const XFER_LAST_KEY = 'sb_xfer_last';   // { dir:'save'|'load', at, sig }
-function xferRemember(dir) {
+function xferRemember(dir, name) {
   try {
     localStorage.setItem(XFER_LAST_KEY, JSON.stringify({
-      dir: dir, at: new Date().toISOString(), sig: syncBundleSig(buildSyncBundle())
+      dir: dir, at: new Date().toISOString(), sig: syncBundleSig(buildSyncBundle()),
+      name: name ? String(name).slice(0, 80) : ''
     }));
   } catch (_) {}
   try { renderXferStatus(); } catch (_) {}
@@ -22904,9 +22905,13 @@ function xferStatus() {
            d.toLocaleTimeString('en-CA', { hour: 'numeric', minute: '2-digit' });
   } catch (_) {}
   const changed = xferChangedSince();
-  const verb = r.dir === 'save' ? 'Saved to a file' : 'Loaded from a file';
+  // Naming the file is the whole point on a phone: it is how you know which
+  // of several in OneDrive to pick when you get back to the computer.
+  const verb = r.dir === 'save'
+    ? ('Saved ' + (r.name || 'to a file'))
+    : ('Loaded ' + (r.name || 'from a file'));
   return {
-    text: verb + ' ' + when + (changed ? ' · changed here since' : ' · nothing changed since'),
+    text: verb + ' · ' + when + (changed ? ' · changed here since' : ' · nothing changed since'),
     warn: changed, none: false, dir: r.dir, changed: changed
   };
 }
@@ -28224,7 +28229,7 @@ function renderInstallRow() {
    One constant, stamped into every page header at boot rather than written
    into four blocks of markup — so bumping it is a one-line change and the
    pages can never disagree about which version they are. */
-const APP_VERSION = 'v1.24';
+const APP_VERSION = 'v1.25';
 function stampAppVersion() {
   document.querySelectorAll('.header-actions').forEach(host => {
     let el = host.querySelector('.app-version');
@@ -28899,6 +28904,20 @@ window.addEventListener('DOMContentLoaded', () => {
    download + file-input pick otherwise (which always works, incl. Android).
    ═══════════════════════════════════════════════════════════════════ */
 const SYNC_FILE_NAME = 'sentrybox-sync.json';
+/* Only the computer truly owns sentrybox-sync.json: it keeps a handle on
+   that one file and writes over it each time. A phone cannot do that — the
+   share sheet hands OneDrive a NEW file, so sending one called
+   sentrybox-sync.json either lands somewhere else entirely or arrives as
+   "sentrybox-sync 1.json", leaving two near-identical names and no way to
+   tell which is which. Anything that is not the computer's own file is
+   therefore stamped with the date and time, so it never collides and the
+   newest is obvious at a glance. */
+function xferOutName() {
+  const d = new Date();
+  const p = n => String(n).padStart(2, '0');
+  return 'sentrybox-sync-' + d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) +
+         '-' + p(d.getHours()) + p(d.getMinutes()) + '.json';
+}
 let _syncFileHandle = null;   // remembered File System Access handle (desktop)
 
 /* Save the current planner data to a JSON file the devices can share. */
@@ -28925,7 +28944,7 @@ async function saveSyncToOneDrive() {
       const writable = await _syncFileHandle.createWritable();
       await writable.write(json);
       await writable.close();
-      xferRemember('save');
+      xferRemember('save', (_syncFileHandle && _syncFileHandle.name) || SYNC_FILE_NAME);
       showToast('✓ Saved to OneDrive — it will sync to your devices');
       return;
     } catch (e) {
@@ -28939,12 +28958,13 @@ async function saveSyncToOneDrive() {
   // went or how to get it to OneDrive. The share sheet is the gesture that
   // actually belongs here: it hands the file straight to the OneDrive app.
   try {
-    const file = new File([json], SYNC_FILE_NAME, { type: 'application/json' });
+    const outName = xferOutName();
+    const file = new File([json], outName, { type: 'application/json' });
     if (navigator.canShare && navigator.share && navigator.canShare({ files: [file] })) {
       try {
-        await navigator.share({ files: [file], title: SYNC_FILE_NAME });
-        xferRemember('save');
-        showToast('✓ Sent — choose OneDrive so your computer can load it', 6000);
+        await navigator.share({ files: [file], title: outName });
+        xferRemember('save', outName);
+        showToast('✓ Sent as ' + outName + ' — choose OneDrive, then load that file on your computer', 9000);
         return;
       } catch (e) {
         // Cancelling the share sheet is a decision, not a failure: do not
@@ -28963,11 +28983,12 @@ async function saveSyncToOneDrive() {
     const blob = new Blob([json], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = url; a.download = SYNC_FILE_NAME;
+    const dlName = xferOutName();
+    a.href = url; a.download = dlName;
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
     setTimeout(() => URL.revokeObjectURL(url), 1500);
-    xferRemember('save');
-    showToast('✓ Saved as ' + SYNC_FILE_NAME + ' in your Downloads — move it into OneDrive', 7000);
+    xferRemember('save', dlName);
+    showToast('✓ Saved as ' + dlName + ' in your Downloads — move it into OneDrive', 9000);
   } catch (e) {
     showToast('⚠ Could not save the data file: ' + (e.message || 'error'));
   }
@@ -28996,7 +29017,10 @@ function _syncFileStatus(msg, kind) {
 
 /* Load planner data from a shared JSON file (phone/tablet, or any device). */
 function loadSyncFromOneDrive() {
-  _syncFileStatus('Opening file picker…', '');
+  // Say which file to pick. There are legitimately two kinds in the folder:
+  // the computer's own sentrybox-sync.json, and a date-stamped one from a
+  // phone. Sorting by date and taking the newest is always right.
+  _syncFileStatus('Opening file picker— pick the newest: sentrybox-sync.json from a computer, or a date-stamped sentrybox-sync-….json from a phone.'.replace('picker—','picker —'), '');
   const input = document.createElement('input');
   input.type = 'file';
   input.accept = '.json,application/json,text/plain,*/*';   // OneDrive sometimes reports odd MIME types
@@ -29127,8 +29151,8 @@ function loadSyncFromOneDrive() {
           renderCompanionLauncher();
         }
       } catch(_){}
-      xferRemember('load');
-      _syncFileStatus('✓ Data loaded from OneDrive — open a card to see it.', 'ok');
+      xferRemember('load', (file && file.name) || '');
+      _syncFileStatus('✓ Loaded "' + file.name + '" — open a card to see it.', 'ok');
     };
     reader.onerror = () => {
       _syncFileStatus('Could not read that file (' + (reader.error && reader.error.name ? reader.error.name : 'read error') + '). If it lives online-only in OneDrive, open it there once to download it, then Load again.', 'err');
@@ -34101,6 +34125,13 @@ function _pkTransferCard() {
     'then tap <b>📥 Load</b> up top and pick <b>sentrybox-sync.json</b>.<br><br>' +
     '<b>To send this phone’s changes back:</b> tap <b>💾 Save</b> up top, put that file in ' +
     'OneDrive, then press <b>📥 Load data from file</b> on the computer.<br><br>' +
+    '<b>Why the two files have different names.</b> The computer owns one file, ' +
+    '<b>sentrybox-sync.json</b>, and writes over it every time. A phone cannot write over ' +
+    'a file that way — sharing always creates a new one — so this phone stamps its file ' +
+    'with the date and time, like <b>sentrybox-sync-2026-10-24-1532.json</b>. That is why ' +
+    'saving here never changes the computer’s file, and why you must pick the stamped one ' +
+    'on the computer. The newest date is always the right one, and the line beside ' +
+    '💾 Save names the exact file this phone last wrote.<br><br>' +
     'Loading replaces what is on the device, so send your changes before loading. ' +
     'The line beside those buttons says whether this device has changed since its last transfer.</div></div>';
 }
