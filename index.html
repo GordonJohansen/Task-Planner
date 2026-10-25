@@ -28230,7 +28230,7 @@ function renderInstallRow() {
    One constant, stamped into every page header at boot rather than written
    into four blocks of markup — so bumping it is a one-line change and the
    pages can never disagree about which version they are. */
-const APP_VERSION = 'v1.28';
+const APP_VERSION = 'v1.29';
 function stampAppVersion() {
   document.querySelectorAll('.header-actions').forEach(host => {
     let el = host.querySelector('.app-version');
@@ -28992,38 +28992,120 @@ function setSaveRoute(v) {
    through the OneDrive app itself, which always can. So the tidy route and
    the route that reaches OneDrive are not always the same route, and this
    makes the second one available on its own. */
-async function shareSyncCopy() {
-  let json;
-  try {
-    const bundle = buildSyncBundle();
-    json = await encWrapForFile(bundle, 'data', { updatedAt: bundle.updatedAt, updatedBy: bundle.updatedBy });
-  } catch (e) { showToast('⚠ Could not gather data: ' + (e.message || 'error')); return false; }
-  const outName = xferOutName();
-  try {
-    const file = new File([json], outName, { type: 'application/json' });
-    if (navigator.canShare && navigator.share && navigator.canShare({ files: [file] })) {
-      await navigator.share({ files: [file], title: outName });
-      xferRemember('save', outName);
-      try { renderXferStatus(); } catch (_) {}
-      showToast('✓ Sent as ' + outName + ' — choose OneDrive from the list', 8000);
-      return true;
-    }
-  } catch (e) {
-    if (e && (e.name === 'AbortError' || e.name === 'NotAllowedError')) { showToast('Nothing was sent.'); return false; }
+/* Android grants a page a few seconds of "the user just tapped something"
+   and navigator.share is only allowed inside it. Awaiting anything first
+   spends that budget, and the browser then refuses with NotAllowedError
+   before a share sheet is ever drawn — which looks exactly like the user
+   cancelling. The old code awaited the payload twice before sharing, so on
+   a phone with a reasonable amount of data it could never succeed.
+   This reaches navigator.share with no await at all whenever the data is
+   not PIN-protected, which is the ordinary case. */
+function shareFileNow(json, name) {
+  const file = new File([json], name, { type: 'application/json' });
+  if (!(navigator.canShare && navigator.share && navigator.canShare({ files: [file] }))) return null;
+  return navigator.share({ files: [file], title: name });
+}
+
+/* Say what actually went wrong. Collapsing every failure into "Nothing was
+   sent" hid the difference between a person closing the sheet and Android
+   refusing outright, which are opposite problems. */
+function shareFailed(e) {
+  const n = (e && e.name) || '';
+  if (n === 'AbortError') { showToast('Nothing was sent — the sharing panel was closed.', 5000); return; }
+  if (n === 'NotAllowedError') {
+    showToast('Android would not open the sharing panel (NotAllowedError). Try "Test sharing" in More — if that fails too, use "Download instead".', 11000);
+    return;
   }
-  // No share sheet: fall back to a download, same as Save does.
+  showToast('Sharing failed: ' + (n || 'error') + (e && e.message ? ' — ' + e.message : ''), 10000);
+}
+
+function shareDone(name) {
+  xferRemember('save', name);
+  try { renderXferStatus(); } catch (_) {}
+  showToast('✓ Sent as ' + name + ' — choose OneDrive from the list', 8000);
+}
+
+/* Download the file instead. Not elegant, but it never fails, and the
+   phone's Files app can move it into OneDrive — the open side of Android
+   reaches OneDrive even where the save side does not. */
+function downloadSyncCopy(json, name) {
   try {
     const blob = new Blob([json], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = url; a.download = outName;
+    a.href = url; a.download = name;
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
     setTimeout(() => URL.revokeObjectURL(url), 1500);
-    xferRemember('save', outName);
+    xferRemember('save', name);
     try { renderXferStatus(); } catch (_) {}
-    showToast('✓ Downloaded ' + outName + ' — move it into OneDrive', 8000);
+    showToast('✓ Downloaded ' + name + ' — open Files → Downloads and move it to OneDrive', 11000);
     return true;
-  } catch (e) { showToast('⚠ Could not share the file: ' + (e.message || 'error')); return false; }
+  } catch (e) { showToast('⚠ Could not save the file: ' + (e.message || 'error')); return false; }
+}
+
+/* Hand the data to the share sheet on purpose, whatever this device can
+   otherwise do. On Android the save picker often cannot reach OneDrive at
+   all — it offers the phone's own storage — while the share sheet goes
+   through the OneDrive app itself. So the tidy route and the route that
+   reaches OneDrive are not always the same route. */
+function shareSyncCopy(forceDownload) {
+  const name = xferOutName();
+
+  // Fast path: no encryption, so the payload is built synchronously and the
+  // share happens in the same turn as the tap, with the activation intact.
+  let json = null;
+  try { if (!encIsOn()) json = JSON.stringify(buildSyncBundle()); }
+  catch (e) { showToast('⚠ Could not gather data: ' + (e.message || 'error')); return Promise.resolve(false); }
+
+  if (json !== null) {
+    if (forceDownload) return Promise.resolve(downloadSyncCopy(json, name));
+    let p = null;
+    try { p = shareFileNow(json, name); }
+    catch (e) { shareFailed(e); return Promise.resolve(false); }
+    if (!p) return Promise.resolve(downloadSyncCopy(json, name));
+    return p.then(() => { shareDone(name); return true; })
+            .catch(e => { shareFailed(e); return false; });
+  }
+
+  // PIN-protected: sealing is genuinely asynchronous, so the activation may
+  // well be gone by the time it finishes. Download rather than pretend.
+  return (async () => {
+    let sealed;
+    try {
+      const bundle = buildSyncBundle();
+      sealed = await encWrapForFile(bundle, 'data', { updatedAt: bundle.updatedAt, updatedBy: bundle.updatedBy });
+    } catch (e) { showToast('⚠ Could not gather data: ' + (e.message || 'error')); return false; }
+    if (forceDownload) return downloadSyncCopy(sealed, name);
+    try {
+      const p = shareFileNow(sealed, name);
+      if (!p) return downloadSyncCopy(sealed, name);
+      await p; shareDone(name); return true;
+    } catch (e) {
+      if (e && e.name === 'NotAllowedError') {
+        showToast('Android refused the share because the file had to be unlocked first — downloading it instead.', 9000);
+        return downloadSyncCopy(sealed, name);
+      }
+      shareFailed(e); return false;
+    }
+  })();
+}
+
+/* A deliberately trivial share, called with nothing awaited beforehand. If
+   this works and a real save does not, the problem is how long the save
+   takes; if this fails too, this device will not share files at all. */
+function testSharing() {
+  const f = new File(['{"test":true}'], 'sentrybox-test.json', { type: 'application/json' });
+  if (!navigator.share) { showToast('This browser has no sharing at all. Use "Download instead".', 9000); return; }
+  if (navigator.canShare && !navigator.canShare({ files: [f] })) {
+    showToast('This browser will not share files (only text). Use "Download instead".', 9000); return;
+  }
+  navigator.share({ files: [f], title: 'sentrybox-test.json' })
+    .then(() => showToast('✓ Sharing works here. If a real save still fails, tell me — it is the size of your data.', 10000))
+    .catch(e => {
+      const n = (e && e.name) || 'error';
+      if (n === 'AbortError') showToast('You closed it — that is fine, it means sharing works.', 7000);
+      else showToast('Sharing is blocked on this device (' + n + '). Use "Download instead".', 11000);
+    });
 }
 
 /* Pick a different file to save into. Without this, v1.26's remembering was
@@ -29087,6 +29169,10 @@ function saveRouteDescription() {
 
 /* Save the current planner data to a JSON file the devices can share. */
 async function saveSyncToOneDrive() {
+  // Checked FIRST, before any data is gathered: gathering is what spends the
+  // tap's activation budget, and a device set to share needs that budget.
+  if (saveRoute() === 'share') { try { await shareSyncCopy(); } catch (_) {} return; }
+
   let json;
   try {
     const bundle = buildSyncBundle();
@@ -29098,14 +29184,6 @@ async function saveSyncToOneDrive() {
   }
   // Preferred path: File System Access API (desktop Edge/Chrome). Lets the
   // user save straight into the OneDrive folder and re-save to the same file.
-  // A device told to share does not touch the file picker: on a phone whose
-  // picker only offers Downloads, owning a file means saving somewhere the
-  // computer will never see.
-  if (saveRoute() === 'share') {
-    try { if (await shareSyncCopy()) return; } catch (_) {}
-    return;
-  }
-
   if (window.showSaveFilePicker) {
     // Two passes. The first uses the remembered file; if that file has since
     // been moved, renamed or deleted, the write fails, we forget it, and the
@@ -29141,45 +29219,18 @@ async function saveSyncToOneDrive() {
       }
     }
   }
-  // A phone has no save picker, so the download below lands silently in the
-  // Downloads folder — the file is saved, but nothing on screen says where it
-  // went or how to get it to OneDrive. The share sheet is the gesture that
-  // actually belongs here: it hands the file straight to the OneDrive app.
+  // No owned file: hand it to the share sheet, and if Android refuses, say
+  // exactly why rather than silently leaving a copy in Downloads.
+  const outName = xferOutName();
   try {
-    const outName = xferOutName();
-    const file = new File([json], outName, { type: 'application/json' });
-    if (navigator.canShare && navigator.share && navigator.canShare({ files: [file] })) {
-      try {
-        await navigator.share({ files: [file], title: outName });
-        xferRemember('save', outName);
-        showToast('✓ Sent as ' + outName + ' — choose OneDrive, then load that file on your computer', 9000);
-        return;
-      } catch (e) {
-        // Cancelling the share sheet is a decision, not a failure: do not
-        // then quietly download a copy they did not ask for.
-        if (e && (e.name === 'AbortError' || e.name === 'NotAllowedError')) {
-          showToast('Nothing was sent.');
-          return;
-        }
-        // anything else: fall through to the download
-      }
-    }
-  } catch (_) {}
-
-  // Fallback: plain download. Say where the file actually went.
-  try {
-    const blob = new Blob([json], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    const dlName = xferOutName();
-    a.href = url; a.download = dlName;
-    document.body.appendChild(a); a.click(); document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(url), 1500);
-    xferRemember('save', dlName);
-    showToast('✓ Saved as ' + dlName + ' in your Downloads — move it into OneDrive', 9000);
+    const p = shareFileNow(json, outName);
+    if (p) { await p; shareDone(outName); return; }
   } catch (e) {
-    showToast('⚠ Could not save the data file: ' + (e.message || 'error'));
+    if (e && e.name === 'AbortError') { shareFailed(e); return; }   // a decision, not a failure
+    shareFailed(e);
+    // NotAllowedError and friends: the data still has to go somewhere.
   }
+  downloadSyncCopy(json, outName);
 }
 
 /* A visible status line for the load process (a fleeting toast is too easy to
@@ -34111,6 +34162,8 @@ function _pkClick(e) {
   if (act === 'guse') { const f = (_pkFiles || [])[parseInt(b.dataset.i, 10)]; if (f) { _pkFiles = null; graphUseFile(f).catch(err => showToast(err.message, 8000)); } return; }
   if (act === 'gid') { _pkEnterId(); return; }
   if (act === 'gout') { _pkDisconnect(); return; }
+  if (act === 'sharetest') { testSharing(); return; }
+  if (act === 'dlcopy') { shareSyncCopy(true); return; }
   if (act === 'route') { setSaveRoute(b.dataset.v); pocketRender(); showToast('Saved — the Save button will ' + (b.dataset.v === 'share' ? 'send to OneDrive.' : b.dataset.v === 'file' ? 'write over a file.' : 'decide automatically.')); return; }
   if (act === 'refile') { chooseSyncFileLocation().then(() => pocketRender()); return; }
   if (act === 'sharecopy') { shareSyncCopy().catch(e => showToast('Could not share: ' + (e.message || 'error'))); return; }
@@ -34348,7 +34401,12 @@ function _pkRouteCard() {
     opt('auto', 'Decide automatically', 'Own a file where that works, otherwise share. The default.') +
     opt('share', 'Always send to OneDrive', 'Skip the save screen and go straight to the share sheet. One file per day.') +
     opt('file', 'Always write over a file', 'Keeps one file and never adds another — only useful if the save screen can reach OneDrive.') +
-    '</div></div>';
+    '</div>' +
+    '<div class="pk-info" style="margin-top:10px">If sharing will not open at all, these two tell you why and get the ' +
+    'data out anyway. A downloaded file can be moved into OneDrive from the phone’s <b>Files</b> app — the ' +
+    'open side of Android reaches OneDrive even where the save side does not.</div>' +
+    '<div class="pk-actions"><button class="pk-btn" data-act="sharetest">Test sharing</button>' +
+    '<button class="pk-btn navy" data-act="dlcopy">Download instead</button></div></div>';
 }
 function _pkTransferCard() {
   // The buttons moved to the bar at the top of every tab; what is left here
