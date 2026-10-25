@@ -23847,6 +23847,10 @@ async function importMobileTransfer(t) {
   });
   if (mode !== 'merge' && mode !== 'replace') { showToast('Import cancelled'); return; }
 
+  // Declared out here, not inside the Mind Dump block: the summary at the end
+  // of this function reads them.
+  let nUpdated = 0, nKept = 0;
+
   // v1.14: save what is on screen, then snapshot, so the import can be undone.
   try { autosaveAll(); } catch (_) {}
   try { maybeAutoBackup(true, true, 'pre'); } catch (_) {}
@@ -23865,6 +23869,37 @@ async function importMobileTransfer(t) {
       //    here (same section, same text) those are kept.
       const cur = loadMindDump();
       const keyOf = it => (it && it.isHeading ? 'H:' : 'I:') + String((it && it.text) || '').trim().toLowerCase();
+
+      /* v1.33: match on the item's id before its text.
+
+         Every Mind Dump item has carried a permanent id since v1.13, and the
+         same id is on both devices because it travels in the sync. Matching
+         on text alone meant that EDITING an item on the phone made it look
+         like a brand-new one: the edit could not update anything, so it was
+         added instead — appearing twice in a Mind Dump section, and on the
+         Daily Top 3, where the first three slots were already full, appended
+         past the end where the post-it never shows it. The data arrived every
+         time; it was simply put where it could not be seen.
+
+         So: same id means same item. Whichever side edited it last wins, by
+         the mod stamp, and an item the phone did not touch is left exactly
+         as it is here. */
+      const _mod = x => { const n = x && Number(x.mod); return Number.isFinite(n) ? n : 0; };
+      const curById = new Map();
+      MIND_DUMP_GROUPS.forEach(g => (Array.isArray(cur[g]) ? cur[g] : []).forEach((it, i) => {
+        if (it && !it.isHeading && it.id && !curById.has(it.id)) curById.set(it.id, { g: g, i: i });
+      }));
+      const applyById = it => {
+        // Returns true when this incoming item IS an item we already hold, so
+        // the caller must not also add it as a new one.
+        if (!it || it.isHeading || !it.id) return false;
+        const at = curById.get(it.id);
+        if (!at) return false;
+        const old = cur[at.g][at.i];
+        if (_mod(it) > _mod(old)) { cur[at.g][at.i] = it; nUpdated++; }
+        else nKept++;
+        return true;
+      };
       const KEEP = ['id', 'mod', 'next', 'ival', 'due', 'pushes', 'star', 'chk', 'assignee', 'assignedAt', 'assignMethod', 'store', 'notes', 'subitems'];
       MIND_DUMP_GROUPS.forEach(g => {
         if (!Array.isArray(t.mindDump[g])) return;            // not in the file — leave this section as it is
@@ -23881,23 +23916,27 @@ async function importMobileTransfer(t) {
           return;
         }
         if (g === 'dailyTop3') {
-          // Top 3 slots are positional: fill empty slots, the rest go to Notes.
-          const have = new Set(existing.map(keyOf));
-          const list = existing.slice();
+          // An item already here keeps its position and is updated in place;
+          // only genuinely new ones look for a slot.
+          const stillNew = incoming.filter(it => !applyById(it));
+          const existingNow = Array.isArray(cur[g]) ? cur[g] : existing;
+          const have = new Set(existingNow.map(keyOf));
+          const list = existingNow.slice();
           while (list.length < 3) list.push({ rate: null, text: '' });
-          incoming.forEach((it, i) => {
+          stillNew.forEach((it, i) => {
             if (!(it.text || '').trim() || have.has(keyOf(it))) return;
             have.add(keyOf(it));
-            const slot = i < 3 ? list.slice(0, 3).findIndex(s => !((s && s.text) || '').trim()) : -1;
+            const slot = list.slice(0, 3).findIndex(s => !((s && s.text) || '').trim());
             if (slot !== -1) list[slot] = it; else list.push(it);
           });
           cur[g] = list;
           return;
         }
-        const list = existing.slice();
+        const stillNew = incoming.filter(it => it.isHeading || !applyById(it));
+        const list = (Array.isArray(cur[g]) ? cur[g] : existing).slice();
         const have = new Set(list.map(keyOf));
         let heading = null;                                    // heading the incoming item sits under
-        incoming.forEach(it => {
+        stillNew.forEach(it => {
           if (it.isHeading) { heading = (it.text || '').trim() ? it : null; return; }
           if (!(it.text || '').trim() || have.has(keyOf(it))) return;
           have.add(keyOf(it));
@@ -23954,7 +23993,15 @@ async function importMobileTransfer(t) {
       });
       localStorage.setItem('sb_daily3_by_date', JSON.stringify(cur));
     }
-    showToast('✓ Imported from phone — reloading…');
+    // Say what actually changed. "It seemed to work" with nothing visibly
+    // different is the worst possible outcome, and it is what happened when
+    // edits were being filed out of sight.
+    (function () {
+      const bits = [];
+      if (nUpdated) bits.push(nUpdated + ' item' + (nUpdated === 1 ? '' : 's') + ' updated');
+      if (nKept) bits.push(nKept + ' already current');
+      showToast('✓ Imported from phone' + (bits.length ? ' — ' + bits.join(', ') : '') + ' — reloading…', 7000);
+    })();
     sbReloadNow(900);
   } catch (e) {
     console.warn('Mobile import failed:', e);
@@ -28230,7 +28277,7 @@ function renderInstallRow() {
    One constant, stamped into every page header at boot rather than written
    into four blocks of markup — so bumping it is a one-line change and the
    pages can never disagree about which version they are. */
-const APP_VERSION = 'v1.32';
+const APP_VERSION = 'v1.33';
 function stampAppVersion() {
   document.querySelectorAll('.header-actions').forEach(host => {
     let el = host.querySelector('.app-version');
@@ -29014,9 +29061,14 @@ function shareFileNow(json, name) {
 const SAVE_LOG_KEY = 'sb_last_save_try';
 function logSaveTry(stage, detail) {
   try {
-    localStorage.setItem(SAVE_LOG_KEY, JSON.stringify({
-      at: new Date().toISOString(), stage: stage, detail: String(detail || '').slice(0, 200)
-    }));
+    // A list, not a single entry. The first version kept only the last, so a
+    // share that was refused and then fell back to a download overwrote its
+    // own error with "downloaded" — losing the one fact worth having.
+    let log = [];
+    try { log = JSON.parse(localStorage.getItem(SAVE_LOG_KEY) || '[]'); } catch (_) {}
+    if (!Array.isArray(log)) log = [log];
+    log.push({ at: new Date().toISOString(), stage: stage, detail: String(detail || '').slice(0, 200) });
+    localStorage.setItem(SAVE_LOG_KEY, JSON.stringify(log.slice(-6)));
   } catch (_) {}
 }
 
@@ -29209,15 +29261,13 @@ function buildDiagnostics() {
   try { owned = (_syncFileHandle && _syncFileHandle.name) || '(none)'; } catch (_) {}
   L.push('  owned file   ' + owned);
   L.push('');
-  L.push('LAST SAVE ATTEMPT');
+  L.push('RECENT SAVE ATTEMPTS (oldest first)');
   try {
-    const r = JSON.parse(localStorage.getItem(SAVE_LOG_KEY) || 'null');
-    if (!r) L.push('  (nothing recorded on this device)');
-    else {
-      L.push('  when         ' + new Date(r.at).toLocaleString('en-CA'));
-      L.push('  got as far as ' + r.stage);
-      L.push('  detail       ' + r.detail);
-    }
+    let log = JSON.parse(localStorage.getItem(SAVE_LOG_KEY) || 'null');
+    if (log && !Array.isArray(log)) log = [log];
+    if (!log || !log.length) L.push('  (nothing recorded on this device)');
+    else log.forEach(r => L.push('  ' + new Date(r.at).toLocaleTimeString('en-CA') +
+      '  ' + String(r.stage).padEnd(15) + ' ' + r.detail));
   } catch (_) { L.push('  (unreadable)'); }
   L.push('');
   L.push('LAST COMPLETED TRANSFER');
