@@ -28295,7 +28295,7 @@ function renderInstallRow() {
    One constant, stamped into every page header at boot rather than written
    into four blocks of markup — so bumping it is a one-line change and the
    pages can never disagree about which version they are. */
-const APP_VERSION = 'v1.34';
+const APP_VERSION = 'v1.35';
 function stampAppVersion() {
   document.querySelectorAll('.header-actions').forEach(host => {
     let el = host.querySelector('.app-version');
@@ -29041,7 +29041,7 @@ const SAVE_ROUTE_KEY = 'sb_save_route';
 function saveRoute() {
   try {
     const v = localStorage.getItem(SAVE_ROUTE_KEY);
-    return (v === 'file' || v === 'share') ? v : 'auto';
+    return (v === 'file' || v === 'share' || v === 'changes') ? v : 'auto';
   } catch (_) { return 'auto'; }
 }
 function setSaveRoute(v) {
@@ -29122,7 +29122,12 @@ function downloadSyncCopy(json, name) {
     xferRemember('save', name);
     try { renderXferStatus(); } catch (_) {}
     logSaveTry('downloaded', name);
-    showToast('✓ Downloaded ' + name + ' — open Files → Downloads and move it to OneDrive', 11000);
+    // Where it has to go next depends on how this device is set up: into
+    // OneDrive if that is the route, or picked up directly off the phone.
+    showToast('✓ Saved to Downloads as ' + name + ' — ' +
+      (saveRoute() === 'changes'
+        ? 'now Quick Share it to your PC (or Files → Downloads → share)'
+        : 'open Files → Downloads and move it to OneDrive'), 11000);
     return true;
   } catch (e) {
     logSaveTry('download-failed', (e && e.name) + ': ' + (e && e.message));
@@ -29399,6 +29404,9 @@ async function forgetManualSyncHandle() {
 /* Which of the three routes this device will actually take, in plain words.
    Shown in More so there is no guessing about where a save goes. */
 function saveRouteDescription() {
+  if (saveRoute() === 'changes') {
+    return { how: 'changes', text: 'Save writes <b>' + _pkEsc(transferOutName()) + '</b> straight into this phone’s <b>Downloads</b> folder — just your Top 3, Mind Dump and reminders. Nothing is shared, so nothing can refuse it.' };
+  }
   if (saveRoute() === 'share') {
     return { how: 'share', text: 'Save hands the file to the share sheet, so you can pick OneDrive. Each save makes <b>' + _pkEsc(xferOutName()) + '</b> — the date is the name, so saving again today reuses it.' };
   }
@@ -29420,6 +29428,11 @@ function saveRouteDescription() {
 async function saveSyncToOneDrive() {
   // Checked FIRST, before any data is gathered: gathering is what spends the
   // tap's activation budget, and a device set to share needs that budget.
+  // Straight to a file on this phone, carrying only what this phone can
+  // change. No share sheet, so nothing to be refused, and no error on the way
+  // past. For picking the file up over Quick Share, Phone Link or a cable —
+  // anything that reads the phone's own storage rather than going via OneDrive.
+  if (saveRoute() === 'changes') { try { await sharePhoneChanges(true); } catch (_) {} return; }
   if (saveRoute() === 'share') { try { await shareSyncCopy(); } catch (_) {} return; }
 
   let json;
@@ -34646,11 +34659,14 @@ function _pkRouteCard() {
     'style="text-align:left;flex:1 1 100%;margin-bottom:6px">' + (r === v ? '✓ ' : '') + label +
     '<span style="display:block;font-weight:400;font-size:11.5px;opacity:.85;margin-top:2px">' + note + '</span></button>';
   return '<div class="pk-card"><h3>⚙ What the Save button does here</h3>' +
-    '<div class="pk-info">If OneDrive is not offered on the save screen, choose the second one. ' +
+    '<div class="pk-info">If OneDrive is not offered on the save screen, or sharing keeps being refused, use ' +
+    '<b>Download just my changes</b> and carry the file across yourself — Quick Share is built into this phone ' +
+    'and sends straight to a Windows PC. ' +
     'This is remembered for this device only — it is never carried to your computer.</div>' +
     '<div class="pk-actions" style="flex-wrap:wrap">' +
     opt('auto', 'Decide automatically', 'Own a file where that works, otherwise share. The default.') +
     opt('share', 'Always send to OneDrive', 'Skip the save screen and go straight to the share sheet. One file per day.') +
+    opt('changes', 'Download just my changes', 'Straight to this phone’s Downloads folder, no sharing involved, nothing that can be refused. Then pick it up with Quick Share, Phone Link or a cable. Smallest and most reliable.') +
     opt('file', 'Always write over a file', 'Keeps one file and never adds another — only useful if the save screen can reach OneDrive.') +
     '</div>' +
     '<div class="pk-info" style="margin-top:10px">If sharing will not open at all, these two tell you why and get the ' +
