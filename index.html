@@ -7641,6 +7641,10 @@ textarea.rem-input { resize:vertical; }
   border: 1px solid var(--border); background: #fff; color: var(--muted); border-radius: 6px; cursor: pointer; }
 .d3-adj-btn:hover { border-color: var(--navy); color: var(--navy); background: var(--sky-light); }
 .d3-adj-btn.danger:hover { border-color: #b94a4a; color: #b94a4a; background: rgba(185,74,74,0.08); }
+/* An edit is waiting: say so on the button, so it is obvious that a changed
+   time has not been applied yet. */
+.d3-adj-btn.pending { border-color: var(--gold, #b8860b); color: #6b4e00; background: rgba(212,175,55,0.22); }
+.d3-adj-btn.pending::before { content: '\2022 '; }
 .d3-adj-empty { font-size: 11.5px; color: var(--muted); font-style: italic; }
 .d3-timer-tags { display: flex; gap: 5px; margin-bottom: 6px; }
 /* Combobox: text input + arrow that reveals the complete list. */
@@ -16371,9 +16375,61 @@ function sessionDelete(id) {
   return true;
 }
 /* Paint the adjust panel on the sticky note. */
+/* An edit in progress in the Adjust panel, waiting to be saved.
+
+   The panel is rebuilt from scratch on every tick of the timer — once a
+   second while anything is running, and again on any sync. Rebuilding
+   replaces the <input> elements, so a time the user had just changed went
+   back to its stored value before they could press Save. From the outside
+   that is a picker that refuses to take a new time, which is what it was
+   reported as. The pop-out tracker already skipped its repaint while a
+   field had focus; the panel on the page never learned to.
+
+   Focus alone is not quite enough here: a native time picker can take focus
+   out of the input while it is open, so a dirty flag carries the state until
+   the edit is saved, deleted, or the session it refers to is replaced. */
+let _trackAdjDirty = false;
+let _trackAdjForId = null;
+
+function _trackAdjHasFocus() {
+  const ae = document.activeElement;
+  return !!(ae && ae.closest && ae.closest('#d3-adjust'));
+}
+function trackAdjClearDirty() { _trackAdjDirty = false; }
+
+/* One delegated listener, installed once: any change inside the panel marks
+   it dirty, except the "Started" field, which applies itself immediately. */
+(function () {
+  const mark = e => {
+    const t = e.target;
+    if (!t || !t.closest || !t.closest('#d3-adjust')) return;
+    if (t.id === 'd3-adj-start') return;        // applies on its own onchange
+    _trackAdjDirty = true;
+    const btn = document.querySelector('#d3-adjust .d3-adj-btn:not(.danger)');
+    if (btn && !btn.classList.contains('pending')) {
+      btn.classList.add('pending');
+      btn.textContent = 'Save changes';
+    }
+  };
+  document.addEventListener('input', mark, true);
+  document.addEventListener('change', mark, true);
+})();
+
 function renderTrackAdjust() {
   const host = document.getElementById('d3-adjust');
   if (!host) return;
+
+  // Hold off while the panel is being edited, so a tick cannot discard it.
+  const s0 = _lastSession();
+  const sameSession = !s0 || _trackAdjForId === null || _trackAdjForId === s0.id;
+  if ((_trackAdjDirty || _trackAdjHasFocus()) && sameSession) return;
+  // A different session has been logged since: the edit no longer refers to
+  // anything on screen, so repaint rather than leave the panel wedged.
+  if (_trackAdjDirty && !sameSession) {
+    _trackAdjDirty = false;
+    try { showToast('Unsaved time correction was dropped — a new session was logged.', 6000); } catch (_) {}
+  }
+  _trackAdjForId = s0 ? s0.id : null;
   const running = _track.running || _track.accumMs > 0;
   const startRow = running
     ? `<div class="d3-adj-row">
@@ -16403,8 +16459,8 @@ function renderTrackAdjust() {
         <input type="text" class="d3-adj-txt" id="d3-adj-lu" value="${escapeHtml(s.sub || '')}" placeholder="Subcategory" autocomplete="off">
       </div>
       <div class="d3-adj-row">
-        <button type="button" class="d3-adj-btn" onclick="sessionEdit(${jsArg(s.id)}, document.getElementById('d3-adj-ls').value, document.getElementById('d3-adj-le').value, document.getElementById('d3-adj-lc').value, document.getElementById('d3-adj-lu').value)">Save</button>
-        <button type="button" class="d3-adj-btn danger" onclick="sessionDelete(${jsArg(s.id)})">Delete</button>
+        <button type="button" class="d3-adj-btn" title="Apply the times and labels above to this session" onclick="trackAdjClearDirty(); sessionEdit(${jsArg(s.id)}, document.getElementById('d3-adj-ls').value, document.getElementById('d3-adj-le').value, document.getElementById('d3-adj-lc').value, document.getElementById('d3-adj-lu').value)">Save</button>
+        <button type="button" class="d3-adj-btn danger" onclick="trackAdjClearDirty(); sessionDelete(${jsArg(s.id)})">Delete</button>
       </div>
     </div>`;
   }
@@ -28295,7 +28351,7 @@ function renderInstallRow() {
    One constant, stamped into every page header at boot rather than written
    into four blocks of markup — so bumping it is a one-line change and the
    pages can never disagree about which version they are. */
-const APP_VERSION = 'v1.35';
+const APP_VERSION = 'v1.36';
 function stampAppVersion() {
   document.querySelectorAll('.header-actions').forEach(host => {
     let el = host.querySelector('.app-version');
