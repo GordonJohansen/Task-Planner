@@ -15650,6 +15650,7 @@ function saveMindDump(data, bypassGuard) {
   // v1.13: every item keeps a permanent id, and a time-stamp of its last
   // real change, so two devices' Mind Dumps can be merged item by item.
   try { mdEnsureIds(data); mdStampMods(data); } catch (e) { console.warn('[Sentry Box] id/mod stamping failed:', e); }
+  try { _mdRecordDeletions(data); } catch (e) { console.warn('[Sentry Box] deletion record failed:', e); }
   localStorage.setItem(MIND_DUMP_KEY, JSON.stringify(data));
   mindDumpDirty = false;
 }
@@ -19743,7 +19744,116 @@ function loadReminders() {
     };
   } catch { return { business: [], personal: [], headings: { business: [], personal: [] } }; }
 }
+/* v1.37 — a record of what was deleted, so a deletion survives a merge.
+
+   Merging a phone's file into the desktop matched items by id and added any
+   it did not recognise. An item deleted on the desktop is, by definition,
+   not recognised — so the next phone import put it straight back. And the
+   phone's own deletions never reached the desktop at all, because Merge
+   only ever added. A deletion left no trace for the other side to act on.
+
+   Now every deletion of a Mind Dump item or a reminder leaves its id and the
+   time, in sb_deleted_ids. The phone's file carries its list; the importer
+   removes anything deleted after its last edit and never re-adds anything
+   deleted here. An edit made AFTER a deletion on the other device still
+   wins, the same newest-change-wins rule items already follow.
+
+   Kept for 180 days, which is far longer than any phone goes between
+   transfers. Literal key strings inside the functions, not a top-level
+   const, because saves can run before this point of the script is reached. */
+function loadDeletedIds() {
+  try {
+    const o = JSON.parse(localStorage.getItem('sb_deleted_ids') || '{}');
+    return (o && typeof o === 'object' && !Array.isArray(o)) ? o : {};
+  } catch (_) { return {}; }
+}
+function saveDeletedIds(map) {
+  const cutoff = Date.now() - 180 * 86400000;
+  const keep = Object.keys(map || {})
+    .filter(k => _mdIdOk(k) && Number(map[k]) >= cutoff)
+    .sort((a, b) => map[b] - map[a]).slice(0, 3000);
+  const out = {};
+  keep.forEach(k => { out[k] = Number(map[k]); });
+  try { localStorage.setItem('sb_deleted_ids', JSON.stringify(out)); } catch (_) {}
+}
+/* Compare what is about to be saved with what is stored, and record the ids
+   that have gone. A save that would remove most of a list at once is far
+   more likely to be a screen being wiped than a person deleting, so that
+   section is not recorded — the existing data-loss guard has the same
+   instinct. Judged per section: one wiped section is a small share of the
+   whole planner, so a planner-wide test would let it through. */
+function _wipeSafeIds(sections, present) {
+  const out = [];
+  sections.forEach(ids => {
+    const gone = ids.filter(id => !present.has(id)).length;
+    if (gone > 20 && gone > ids.length * 0.6) return;   // looks like a wipe: skip this section
+    ids.forEach(id => out.push(id));
+  });
+  return out;
+}
+function _recordDeletions(prevIds, presentIds) {
+  const map = loadDeletedIds();
+  let changed = false;
+  presentIds.forEach(id => { if (map[id]) { delete map[id]; changed = true; } });   // here, so not deleted
+  const gone = prevIds.filter(id => !presentIds.has(id));
+  if (gone.length && !(gone.length > 20 && gone.length > prevIds.length * 0.6)) {
+    const now = Date.now();
+    gone.forEach(id => { if (!map[id]) { map[id] = now; changed = true; } });
+  }
+  if (changed) saveDeletedIds(map);
+}
+function _mdRecordDeletions(next) {
+  let prev;
+  try { prev = JSON.parse(localStorage.getItem(MIND_DUMP_KEY) || '{}') || {}; } catch (_) { return; }
+  const present = new Set();
+  const add = list => (Array.isArray(list) ? list : []).forEach(it => { if (it && it.id) present.add(it.id); });
+  Object.keys(next || {}).forEach(g => add(next[g]));
+  // An item moved into a day's Top 3 history has not been deleted.
+  try { const by = JSON.parse(localStorage.getItem('sb_daily3_by_date') || '{}') || {}; Object.keys(by).forEach(k => add(by[k])); } catch (_) {}
+  const sections = [];
+  Object.keys(prev).forEach(g => {
+    // The Daily Top 3 is a per-day working list that is swapped wholesale
+    // when the day changes; rows leaving it are not deletions.
+    if (g === 'dailyTop3') return;
+    sections.push((Array.isArray(prev[g]) ? prev[g] : [])
+      .filter(it => it && !it.isHeading && it.id && String(it.text || '').trim()).map(it => it.id));
+  });
+  _recordDeletions(_wipeSafeIds(sections, present), present);
+}
+function _remAll(o) {
+  o = o || {};
+  const h = o.headings || {};
+  return [].concat(o.business || [], o.personal || [], h.business || [], h.personal || [])
+           .filter(r => r && typeof r === 'object' && !Array.isArray(r));
+}
+/* Reminders carried no "last changed" time, so a merge could not tell an
+   edited reminder from an unchanged one and simply kept the desktop's. This
+   stamps one on save — only when the reminder actually changed, so the
+   first save after updating does not mark every reminder as edited today. */
+function _remStampAndRecord(next) {
+  let prev;
+  try { prev = JSON.parse(localStorage.getItem(REMINDERS_KEY) || '{}') || {}; } catch (_) { prev = {}; }
+  const sig = r => { const k = Object.keys(r).filter(x => x !== 'mod').sort(); return JSON.stringify(k.map(x => [x, r[x]])); };
+  const prevById = new Map();
+  _remAll(prev).forEach(r => { if (r.id) prevById.set(r.id, r); });
+  const ph = prev.headings || {};
+  const remSections = [prev.business, prev.personal, ph.business, ph.personal]
+    .map(l => (Array.isArray(l) ? l : []).filter(r => r && r.id).map(r => r.id));
+  const now = Date.now(), present = new Set();
+  _remAll(next).forEach(r => {
+    if (!r.id) return;
+    present.add(r.id);
+    const p = prevById.get(r.id);
+    const own = (typeof r.mod === 'number' && isFinite(r.mod)) ? r.mod : 0;
+    const pm = p && typeof p.mod === 'number' && isFinite(p.mod) ? p.mod : 0;
+    if (p && sig(p) === sig(r)) { const m = Math.max(pm, own); if (m) r.mod = m; else delete r.mod; }
+    else r.mod = (own && (!p || own > pm)) ? own : now;   // an imported edit keeps its own time
+  });
+  _recordDeletions(_wipeSafeIds(remSections, present), present);
+}
+
 function saveReminders(data) {
+  try { _remStampAndRecord(data); } catch (e) { console.warn('[Sentry Box] reminder stamping failed:', e); }
   localStorage.setItem(REMINDERS_KEY, JSON.stringify(data));
   try { if (typeof syncUploadDebounced === 'function') syncUploadDebounced(); } catch(_){}
 }
@@ -23895,7 +24005,7 @@ async function importMobileTransfer(t) {
     message: `Exported ${when}\nContains ${mindCount} Mind Dump item${mindCount === 1 ? '' : 's'}, ${remCount} reminder${remCount === 1 ? '' : 's'}, plus Daily Top 3.\n\n` +
              `Weeks, quarters and other data are not affected either way.`,
     buttons: [
-      { label: 'Merge', hint: 'Adds the phone\u2019s new items to what is already here. Nothing is removed or duplicated.', value: 'merge', kind: 'primary' },
+      { label: 'Merge', hint: 'Brings in the phone\u2019s new items and changes, and removes what you deleted on the phone. Nothing is duplicated, and anything deleted here stays deleted.', value: 'merge', kind: 'primary' },
       { label: 'Replace', hint: 'The phone\u2019s Daily Top 3, Mind Dump and Reminders replace this device\u2019s.', value: 'replace', kind: 'danger' },
       { label: 'Cancel', hint: 'Import nothing.', value: 'cancel', kind: 'plain' }
     ],
@@ -23905,7 +24015,33 @@ async function importMobileTransfer(t) {
 
   // Declared out here, not inside the Mind Dump block: the summary at the end
   // of this function reads them.
-  let nUpdated = 0, nKept = 0;
+  let nUpdated = 0, nKept = 0, nRemoved = 0;
+
+  // v1.37: deletion records. Incoming ones are the phone's deletions; ours
+  // are this device's. A record for an id that is actually present on the
+  // side that sent it is stale and ignored (it was deleted, then restored).
+  const _held = (md, rem) => {
+    const s = new Set();
+    MIND_DUMP_GROUPS.forEach(g => ((md && md[g]) || []).forEach(it => { if (it && it.id) s.add(it.id); }));
+    _remAll(rem).forEach(r => { if (r.id) s.add(r.id); });
+    return s;
+  };
+  const inDel = {};
+  {
+    const raw = (t.deleted && typeof t.deleted === 'object' && !Array.isArray(t.deleted)) ? t.deleted : {};
+    const inHeld = _held(t.mindDump, t.reminders);
+    Object.keys(raw).forEach(id => { const v = Number(raw[id]); if (_mdIdOk(id) && isFinite(v) && v > 0 && !inHeld.has(id)) inDel[id] = v; });
+  }
+  const delAll = (function () {
+    const mine = loadDeletedIds(), localHeld = _held(loadMindDump(), loadReminders()), out = {};
+    Object.keys(mine).forEach(id => { if (!localHeld.has(id)) out[id] = Number(mine[id]); });
+    Object.keys(inDel).forEach(id => { out[id] = Math.max(out[id] || 0, inDel[id]); });
+    return out;
+  })();
+  saveDeletedIds(delAll);
+  const _modOf = x => { const n = x && Number(x.mod); return isFinite(n) ? n : 0; };
+  // Deleted after its last edit, on either device: do not bring it in.
+  const isDead = it => !!(it && it.id && delAll[it.id] && delAll[it.id] >= _modOf(it));
 
   // v1.14: save what is on screen, then snapshot, so the import can be undone.
   try { autosaveAll(); } catch (_) {}
@@ -23941,6 +24077,15 @@ async function importMobileTransfer(t) {
          the mod stamp, and an item the phone did not touch is left exactly
          as it is here. */
       const _mod = x => { const n = x && Number(x.mod); return Number.isFinite(n) ? n : 0; };
+      // The phone's deletions: remove here anything it deleted after this
+      // device last edited it. Done before indexing, so positions hold.
+      MIND_DUMP_GROUPS.forEach(g => {
+        if (!Array.isArray(cur[g])) return;
+        const before = cur[g].length;
+        cur[g] = cur[g].filter(it => !(it && !it.isHeading && it.id && inDel[it.id] && inDel[it.id] > _modOf(it)));
+        nRemoved += before - cur[g].length;
+      });
+
       const curById = new Map();
       MIND_DUMP_GROUPS.forEach(g => (Array.isArray(cur[g]) ? cur[g] : []).forEach((it, i) => {
         if (it && !it.isHeading && it.id && !curById.has(it.id)) curById.set(it.id, { g: g, i: i });
@@ -23959,7 +24104,7 @@ async function importMobileTransfer(t) {
       const KEEP = ['id', 'mod', 'next', 'ival', 'due', 'pushes', 'star', 'chk', 'assignee', 'assignedAt', 'assignMethod', 'store', 'notes', 'subitems'];
       MIND_DUMP_GROUPS.forEach(g => {
         if (!Array.isArray(t.mindDump[g])) return;            // not in the file — leave this section as it is
-        const incoming = _mdSanitizeRows(t.mindDump[g]);
+        const incoming = _mdSanitizeRows(t.mindDump[g]).filter(it => it.isHeading || !isDead(it));
         const existing = Array.isArray(cur[g]) ? cur[g] : [];
         const byKey = new Map();
         existing.forEach(it => { if (it && !it.isHeading && (it.text || '').trim() && !byKey.has(keyOf(it))) byKey.set(keyOf(it), it); });
@@ -24042,18 +24187,32 @@ async function importMobileTransfer(t) {
           personal: (Array.isArray(_hd.personal) ? _hd.personal : []).filter(_okRem)
         }
       };
+      const alive = r => !isDead(r);
       if (mode === 'replace') {
         saveReminders({
-          business: inc.business||[], personal: inc.personal||[],
-          headings: { business: (inc.headings&&inc.headings.business)||[], personal: (inc.headings&&inc.headings.personal)||[] }
+          business: (inc.business||[]).filter(alive), personal: (inc.personal||[]).filter(alive),
+          headings: { business: ((inc.headings&&inc.headings.business)||[]).filter(alive), personal: ((inc.headings&&inc.headings.personal)||[]).filter(alive) }
         });
       } else {
+        // v1.37: an existing reminder used to be skipped outright, so one
+        // retitled, rescheduled or ticked off on the phone came through
+        // unchanged. Now the newer edit wins, in place.
         const cur = loadReminders();
+        const mergeList = (mine, theirs) => {
+          let list = (mine || []).filter(r => !(r && r.id && inDel[r.id] && inDel[r.id] > _modOf(r)));
+          nRemoved += (mine || []).length - list.length;
+          const at = new Map(); list.forEach((r, i) => { if (r && r.id) at.set(r.id, i); });
+          (theirs || []).forEach(r => {
+            if (!alive(r)) return;
+            if (!at.has(r.id)) { list.push(r); at.set(r.id, list.length - 1); return; }
+            const i = at.get(r.id);
+            if (_modOf(r) > _modOf(list[i])) { list[i] = r; nUpdated++; } else nKept++;
+          });
+          return list;
+        };
         ['business','personal'].forEach(sec => {
-          const ids = new Set((cur[sec]||[]).map(r => r.id));
-          (inc[sec]||[]).forEach(r => { if (!ids.has(r.id)) cur[sec].push(r); });
-          const hids = new Set((cur.headings[sec]||[]).map(h => h.id));
-          ((inc.headings && inc.headings[sec])||[]).forEach(h => { if (!hids.has(h.id)) cur.headings[sec].push(h); });
+          cur[sec] = mergeList(cur[sec], inc[sec]);
+          cur.headings[sec] = mergeList(cur.headings[sec], inc.headings && inc.headings[sec]);
         });
         saveReminders(cur);
       }
@@ -24073,6 +24232,7 @@ async function importMobileTransfer(t) {
     (function () {
       const bits = [];
       if (nUpdated) bits.push(nUpdated + ' item' + (nUpdated === 1 ? '' : 's') + ' updated');
+      if (nRemoved) bits.push(nRemoved + ' removed (deleted on the phone)');
       if (nKept) bits.push(nKept + ' already current');
       showToast('✓ Imported from phone' + (bits.length ? ' — ' + bits.join(', ') : '') + ' — reloading…', 7000);
     })();
@@ -28351,7 +28511,7 @@ function renderInstallRow() {
    One constant, stamped into every page header at boot rather than written
    into four blocks of markup — so bumping it is a one-line change and the
    pages can never disagree about which version they are. */
-const APP_VERSION = 'v1.36';
+const APP_VERSION = 'v1.37';
 function stampAppVersion() {
   document.querySelectorAll('.header-actions').forEach(host => {
     let el = host.querySelector('.app-version');
@@ -29280,6 +29440,14 @@ function buildPhoneTransfer() {
         personal: stamp(r.headings && r.headings.personal, 'rh_')
       }
     };
+  } catch (_) {}
+  try {
+    const held = new Set();
+    MIND_DUMP_GROUPS.forEach(g => ((t.mindDump && t.mindDump[g]) || []).forEach(it => { if (it && it.id) held.add(it.id); }));
+    _remAll(t.reminders).forEach(r => { if (r.id) held.add(r.id); });
+    const del = loadDeletedIds(), out = {};
+    Object.keys(del).forEach(id => { if (!held.has(id)) out[id] = del[id]; });
+    t.deleted = out;
   } catch (_) {}
   return t;
 }
