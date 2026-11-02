@@ -16837,12 +16837,18 @@ function keepTickAll(on) {
    in on the Mind Dump page, where the list lives. */
 function _keepAddPromises(lines, mode) {
   try { flushPendingPromises(); } catch (_) {}
-  const stamp = new Date().toISOString();
+  // Each promise gets its own creation time, a millisecond apart: that time is
+  // how two devices tell promises apart, so a batch must not share one.
+  const base = Date.now(), stamps = new Set();
   const arr = loadPromises(mode);
-  lines.forEach(t => arr.push({ who: '', what: t, byDate: '', done: false, addedAt: stamp }));
+  lines.forEach((t, i) => {
+    const at = new Date(base + i).toISOString();
+    stamps.add(at);
+    arr.push({ who: '', what: t, byDate: '', done: false, addedAt: at });
+  });
   savePromises(mode, arr);
   return () => {
-    const keep = loadPromises(mode).filter(p => !(p.addedAt === stamp && lines.includes(p.what)));
+    const keep = loadPromises(mode).filter(p => !stamps.has(p.addedAt));
     savePromises(mode, keep);
   };
 }
@@ -19096,7 +19102,45 @@ function loadPromises(mode) {
     return Array.isArray(arr) ? arr.filter(p => p && typeof p === 'object' && !Array.isArray(p)) : [];
   } catch { return []; }
 }
+/* v1.39 — promises travel in the phone's "just my changes" file, so a merge
+   needs to know which promise is which, when each was last changed, and
+   which were deleted.
+
+   Identity: the time a promise was created (addedAt). It is set once and
+   never changes when the promise is edited, and it is what the full
+   OneDrive sync already uses, so the two agree. A very old promise without
+   one falls back to who + what, exactly as the sync does. */
+function _promKey(p) {
+  return p && p.addedAt ? 'at:' + String(p.addedAt) : 'p:' + String((p && p.who) || '') + '|' + String((p && p.what) || '');
+}
+/* The deletion record wants a short id of letters and digits; the creation
+   time has colons and dots, so it is hashed. */
+function _promDelId(p) { return 'pm_' + _syncHash(_promKey(p)); }
+function _promStampAndRecord(mode, next) {
+  let prev;
+  try { prev = JSON.parse(localStorage.getItem(PROMISES_KEYS[mode]) || '[]'); } catch (_) { prev = []; }
+  if (!Array.isArray(prev)) prev = [];
+  prev = prev.filter(p => p && typeof p === 'object' && !Array.isArray(p));
+  const sig = r => { const k = Object.keys(r).filter(x => x !== 'mod').sort(); return JSON.stringify(k.map(x => [x, r[x]])); };
+  const prevByKey = new Map();
+  prev.forEach(p => { const k = _promKey(p); if (!prevByKey.has(k)) prevByKey.set(k, p); });
+  const now = Date.now(), present = new Set();
+  (Array.isArray(next) ? next : []).forEach(p => {
+    if (!p || typeof p !== 'object' || Array.isArray(p)) return;
+    present.add(_promDelId(p));
+    const q = prevByKey.get(_promKey(p));
+    const own = (typeof p.mod === 'number' && isFinite(p.mod)) ? p.mod : 0;
+    const qm = q && typeof q.mod === 'number' && isFinite(q.mod) ? q.mod : 0;
+    // Stamped only when it actually changed, so updating marks nothing as edited.
+    if (q && sig(q) === sig(p)) { const m = Math.max(qm, own); if (m) p.mod = m; else delete p.mod; }
+    else p.mod = (own && (!q || own > qm)) ? own : now;
+  });
+  // A blank row that was never filled in is not worth recording as deleted.
+  const prevIds = prev.filter(p => String(p.what || '').trim() || String(p.who || '').trim()).map(_promDelId);
+  _recordDeletions(_wipeSafeIds([prevIds], present), present);
+}
 function savePromises(mode, arr) {
+  try { _promStampAndRecord(mode, arr); } catch (e) { console.warn('[Sentry Box] promise stamping failed:', e); }
   localStorage.setItem(PROMISES_KEYS[mode], JSON.stringify(arr));
 }
 
@@ -24013,7 +24057,7 @@ function handleRestoreFile(input) {
     }
 
     // A file coming back FROM the phone is a "mobile transfer" — it only
-    // carries Daily Top 3, Mind Dump and Reminders. Route it to a merge that
+    // carries Daily Top 3, Mind Dump, Reminders and Promises. Route it to a merge that
     // touches ONLY those sections and leaves weeks/quarters/prefs alone.
     if (backup && backup._format === 'sentrybox-mobile-transfer') {
       importMobileTransfer(backup);
@@ -24118,17 +24162,19 @@ async function importMobileTransfer(t) {
   })();
   const _len = a => Array.isArray(a) ? a.length : 0;
   const remCount = (t.reminders && typeof t.reminders === 'object') ? (_len(t.reminders.business) + _len(t.reminders.personal)) : 0;
+  const promCount = (t.promises && typeof t.promises === 'object') ? (_len(t.promises.business) + _len(t.promises.personal)) : 0;
   const when = t._exportedAt ? new Date(t._exportedAt).toLocaleString('en-CA') : 'unknown date';
 
   // v1.12: one dialog whose buttons say what they do. It used to be two
   // OK/Cancel boxes, the second of which meant "OK = Merge, Cancel = Replace".
   const mode = await sbChoice({
     title: 'Import from your phone',
-    message: `Exported ${when}\nContains ${mindCount} Mind Dump item${mindCount === 1 ? '' : 's'}, ${remCount} reminder${remCount === 1 ? '' : 's'}, plus Daily Top 3.\n\n` +
+    message: `Exported ${when}\nContains ${mindCount} Mind Dump item${mindCount === 1 ? '' : 's'}, ${remCount} reminder${remCount === 1 ? '' : 's'}` +
+             (promCount ? `, ${promCount} promise${promCount === 1 ? '' : 's'}` : '') + `, plus Daily Top 3.\n\n` +
              `Weeks, quarters and other data are not affected either way.`,
     buttons: [
       { label: 'Merge', hint: 'Brings in the phone\u2019s new items and changes, and removes what you deleted on the phone. Nothing is duplicated, and anything deleted here stays deleted.', value: 'merge', kind: 'primary' },
-      { label: 'Replace', hint: 'The phone\u2019s Daily Top 3, Mind Dump and Reminders replace this device\u2019s.', value: 'replace', kind: 'danger' },
+      { label: 'Replace', hint: 'The phone\u2019s Daily Top 3, Mind Dump, Reminders and Promises replace this device\u2019s.', value: 'replace', kind: 'danger' },
       { label: 'Cancel', hint: 'Import nothing.', value: 'cancel', kind: 'plain' }
     ],
     cancelValue: 'cancel'
@@ -24142,20 +24188,21 @@ async function importMobileTransfer(t) {
   // v1.37: deletion records. Incoming ones are the phone's deletions; ours
   // are this device's. A record for an id that is actually present on the
   // side that sent it is stale and ignored (it was deleted, then restored).
-  const _held = (md, rem) => {
+  const _held = (md, rem, prom) => {
     const s = new Set();
     MIND_DUMP_GROUPS.forEach(g => ((md && md[g]) || []).forEach(it => { if (it && it.id) s.add(it.id); }));
     _remAll(rem).forEach(r => { if (r.id) s.add(r.id); });
+    ['business', 'personal'].forEach(m => ((prom && Array.isArray(prom[m])) ? prom[m] : []).forEach(p => { if (p && typeof p === 'object') s.add(_promDelId(p)); }));
     return s;
   };
   const inDel = {};
   {
     const raw = (t.deleted && typeof t.deleted === 'object' && !Array.isArray(t.deleted)) ? t.deleted : {};
-    const inHeld = _held(t.mindDump, t.reminders);
+    const inHeld = _held(t.mindDump, t.reminders, t.promises);
     Object.keys(raw).forEach(id => { const v = Number(raw[id]); if (_mdIdOk(id) && isFinite(v) && v > 0 && !inHeld.has(id)) inDel[id] = v; });
   }
   const delAll = (function () {
-    const mine = loadDeletedIds(), localHeld = _held(loadMindDump(), loadReminders()), out = {};
+    const mine = loadDeletedIds(), localHeld = _held(loadMindDump(), loadReminders(), { business: loadPromises('business'), personal: loadPromises('personal') }), out = {};
     Object.keys(mine).forEach(id => { if (!localHeld.has(id)) out[id] = Number(mine[id]); });
     Object.keys(inDel).forEach(id => { out[id] = Math.max(out[id] || 0, inDel[id]); });
     return out;
@@ -24337,6 +24384,52 @@ async function importMobileTransfer(t) {
           cur.headings[sec] = mergeList(cur.headings[sec], inc.headings && inc.headings[sec]);
         });
         saveReminders(cur);
+      }
+    }
+    // v1.39: Promises Made, business and personal. Same rules as reminders:
+    // the newer edit wins in place, the phone's deletions are applied, and
+    // anything deleted here is not brought back.
+    if (t.promises && typeof t.promises === 'object' && !Array.isArray(t.promises)) {
+      // A file is outside input: plain values only, of sensible length, and
+      // never a key that could reach an object's prototype.
+      const clean = p => {
+        const o = {};
+        Object.keys(p).forEach(k => {
+          if (k === '__proto__' || k === 'constructor' || k === 'prototype') return;
+          const v = p[k];
+          if (typeof v === 'string') o[k] = v.slice(0, 2000);
+          else if (typeof v === 'number' && isFinite(v)) o[k] = v;
+          else if (typeof v === 'boolean') o[k] = v;
+        });
+        o.who = String(o.who || ''); o.what = String(o.what || '');
+        o.byDate = isDateKeyStr(o.byDate) ? o.byDate : '';
+        o.done = !!o.done;
+        return o;
+      };
+      const promDead = p => { const id = _promDelId(p); return !!(delAll[id] && delAll[id] >= _modOf(p)); };
+      let promTouched = false;
+      ['business', 'personal'].forEach(pm => {
+        if (!Array.isArray(t.promises[pm])) return;          // not in the file: leave this list alone
+        const inc = t.promises[pm].filter(p => p && typeof p === 'object' && !Array.isArray(p)).map(clean);
+        try { flushPendingPromises(); } catch (_) {}
+        promTouched = true;
+        if (mode === 'replace') { savePromises(pm, inc.filter(p => !promDead(p))); return; }
+        const mine = loadPromises(pm);
+        const list = mine.filter(p => { const id = _promDelId(p); return !(inDel[id] && inDel[id] > _modOf(p)); });
+        nRemoved += mine.length - list.length;
+        const at = new Map(); list.forEach((p, i) => { const k = _promKey(p); if (!at.has(k)) at.set(k, i); });
+        inc.forEach(p => {
+          if (promDead(p)) return;
+          const k = _promKey(p);
+          if (!at.has(k)) { list.push(p); at.set(k, list.length - 1); return; }
+          const i = at.get(k);
+          if (_modOf(p) > _modOf(list[i])) { list[i] = p; nUpdated++; } else nKept++;
+        });
+        savePromises(pm, list);
+      });
+      if (promTouched) {
+        try { renderPromises(); } catch (_) {}
+        try { updateMindDumpHeaderBadges(); } catch (_) {}
       }
     }
     // Daily Top 3 per-day history
@@ -28633,7 +28726,7 @@ function renderInstallRow() {
    One constant, stamped into every page header at boot rather than written
    into four blocks of markup — so bumping it is a one-line change and the
    pages can never disagree about which version they are. */
-const APP_VERSION = 'v1.38';
+const APP_VERSION = 'v1.39';
 function stampAppVersion() {
   document.querySelectorAll('.header-actions').forEach(host => {
     let el = host.querySelector('.app-version');
@@ -29564,9 +29657,11 @@ function buildPhoneTransfer() {
     };
   } catch (_) {}
   try {
+    t.promises = { business: loadPromises('business'), personal: loadPromises('personal') };
     const held = new Set();
     MIND_DUMP_GROUPS.forEach(g => ((t.mindDump && t.mindDump[g]) || []).forEach(it => { if (it && it.id) held.add(it.id); }));
     _remAll(t.reminders).forEach(r => { if (r.id) held.add(r.id); });
+    ['business', 'personal'].forEach(m => (t.promises[m] || []).forEach(p => held.add(_promDelId(p))));
     const del = loadDeletedIds(), out = {};
     Object.keys(del).forEach(id => { if (!held.has(id)) out[id] = del[id]; });
     t.deleted = out;
@@ -29751,7 +29846,7 @@ async function forgetManualSyncHandle() {
    Shown in More so there is no guessing about where a save goes. */
 function saveRouteDescription() {
   if (saveRoute() === 'changes') {
-    return { how: 'changes', text: 'Save writes <b>' + _pkEsc(transferOutName()) + '</b> straight into this phone’s <b>Downloads</b> folder — just your Top 3, Mind Dump and reminders. Nothing is shared, so nothing can refuse it.' };
+    return { how: 'changes', text: 'Save writes <b>' + _pkEsc(transferOutName()) + '</b> straight into this phone’s <b>Downloads</b> folder — just your Top 3, Mind Dump, reminders and promises. Nothing is shared, so nothing can refuse it.' };
   }
   if (saveRoute() === 'share') {
     return { how: 'share', text: 'Save hands the file to the share sheet, so you can pick OneDrive. Each save makes <b>' + _pkEsc(xferOutName()) + '</b> — the date is the name, so saving again today reuses it.' };
@@ -35019,7 +35114,7 @@ function _pkRouteCard() {
     'data out anyway. A downloaded file can be moved into OneDrive from the phone’s <b>Files</b> app — the ' +
     'open side of Android reaches OneDrive even where the save side does not.</div>' +
     '<div class="pk-info" style="margin-top:10px"><b>If a save is refused, try this first.</b> It sends only the ' +
-    'Daily Top 3, Mind Dump and reminders — everything these phone screens can change — instead of the whole ' +
+    'Daily Top 3, Mind Dump, reminders and promises — everything these phone screens can change — instead of the whole ' +
     'planner, so it is a small fraction of the size. The computer merges it and asks first; your weeks and ' +
     'quarters there are not touched, and nothing on the computer can be lost to it.</div>' +
     '<div class="pk-actions"><button class="pk-btn gold" data-act="sendsmall" style="flex:1 1 100%">Send just my changes</button></div>' +
