@@ -8220,6 +8220,17 @@ body.daily3-popout .daily3-panel {
   border-radius: 4px;
   border-left: 3px solid #b94a4a;
 }
+/* v1.40: which week the import will fill, shown before anything happens */
+.pc-target { border: 2px solid var(--navy); border-radius: 10px; padding: 10px 12px; margin: 0 0 14px; background: #f5f8fd; }
+.pc-target.warn { border-color: #c9892b; background: #fff8ec; }
+.pc-target-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.pc-target-row label { font-weight: 700; color: var(--navy); font-size: 13.5px; }
+.pc-target-row input[type=date] { font-family: inherit; font-size: 14px; padding: 5px 8px; border: 1px solid var(--border); border-radius: 7px; }
+.pc-target-week { font-weight: 700; font-size: 14.5px; color: var(--ink); }
+.pc-target-rel { font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 10px; background: var(--navy); color: #fff; }
+.pc-target-note { font-size: 12.5px; color: var(--muted); margin-top: 6px; line-height: 1.45; }
+.pc-target-alert { font-size: 13px; font-weight: 600; color: #8a5300; margin-top: 6px; }
+.pc-target-ok { font-size: 13px; font-weight: 600; color: #2f7a4a; margin-top: 6px; }
 .pc-import-preview .pc-pv-badge {
   display: inline-block;
   background: var(--navy);
@@ -26618,7 +26629,82 @@ function parseProCoachImport() {
 
   // Render preview
   preview.innerHTML = _pcRenderPreview(kind, parsed);
+  if (kind === 'weekly') {
+    _pcImportParsed.target = _pcDefaultTargetWeek(parsed);
+    const inp = document.getElementById('pc-target-date');
+    if (inp) {
+      inp.value = _pcImportParsed.target;
+      inp.addEventListener('change', () => {
+        if (!isDateKeyStr(inp.value)) return;
+        _pcImportParsed.target = isoMonday(inp.value);     // any day picks its week
+        _pcImportParsed.targetChosen = true;
+        inp.value = _pcImportParsed.target;
+        _pcRefreshTarget();
+      });
+    }
+    _pcRefreshTarget();
+  }
   document.getElementById('pc-import-apply-btn').disabled = false;
+}
+
+/* v1.40 — say which week an import will fill, and make it easy to change.
+
+   The week used to be decided silently: the date from the ProCoach page, or,
+   if the page had none, the Monday of today. Done on a Sunday evening, as a
+   weekly plan usually is, "the Monday of today" is the PREVIOUS Monday, and
+   ProCoach's own current week is also still the one that is ending — so a
+   plan for the coming week could land on top of the week just finished, and
+   the only warning was an OK/Cancel box that was easy to click through. */
+function _pcWeekLabel(mon) {
+  const s = new Date(mon + 'T12:00:00'), e = new Date(mon + 'T12:00:00');
+  e.setDate(e.getDate() + 6);
+  const f = d => d.toLocaleDateString('en-CA', { weekday: 'short', month: 'short', day: 'numeric' });
+  return f(s) + ' – ' + f(e) + (s.getFullYear() !== new Date().getFullYear() ? ', ' + s.getFullYear() : '');
+}
+function _pcWeekRel(mon) {
+  const n = Math.round((new Date(mon + 'T12:00:00') - new Date(isoMonday(new Date()) + 'T12:00:00')) / (7 * 86400000));
+  if (n === 0) return 'this week';
+  if (n === 1) return 'next week';
+  if (n === -1) return 'last week';
+  return n > 1 ? n + ' weeks ahead' : (-n) + ' weeks ago';
+}
+function _pcWeekHasContent(key) {
+  const w = loadWeekData(key);
+  return !!(w && Object.keys(w).some(k =>
+    k !== 'weekStart' && k !== 'weekEnd' && k !== 'savedAt' &&
+    w[k] && (typeof w[k] !== 'object' || /"[^"]*":"[^"]+"|"[^"]*":true/.test(JSON.stringify(w[k])))));
+}
+function _pcDefaultTargetWeek(d) {
+  if (d && isDateKeyStr(d.weekStart)) return isoMonday(d.weekStart);
+  // No date on the page. A weekly plan made on a Saturday or Sunday is for the
+  // week about to start, not the one ending.
+  const now = new Date(), dow = now.getDay();
+  if (dow === 6 || dow === 0) { const n = new Date(now); n.setDate(n.getDate() + (dow === 6 ? 2 : 1)); return isoMonday(n); }
+  return isoMonday(now);
+}
+function _pcRefreshTarget() {
+  const box = document.getElementById('pc-target');
+  if (!box || !_pcImportParsed) return;
+  const t = _pcImportParsed.target, d = _pcImportParsed.data || {};
+  const wk = document.getElementById('pc-target-week'), rel = document.getElementById('pc-target-rel');
+  const note = document.getElementById('pc-target-note'), st = document.getElementById('pc-target-status');
+  if (wk) wk.textContent = _pcWeekLabel(t);
+  if (rel) rel.textContent = _pcWeekRel(t);
+  const fromPage = isDateKeyStr(d.weekStart) && isoMonday(d.weekStart) === t;
+  if (note) note.textContent = fromPage
+    ? 'This is the week that was selected on the ProCoach page when you copied it' +
+      (new Date().getDay() === 0 || new Date().getDay() === 6 ? ' — on a weekend, ProCoach still shows the week that is ending. If this plan is for the coming week, change the date.' : '.')
+    : (_pcImportParsed.targetChosen ? 'You chose this week.'
+       : 'The ProCoach page did not say which week it was, so this was picked from today\u2019s date. Change it if it is wrong.');
+  const has = _pcWeekHasContent(t);
+  const ended = t < isoMonday(new Date());
+  box.classList.toggle('warn', has || ended);
+  if (st) {
+    st.className = has ? 'pc-target-alert' : (ended ? 'pc-target-alert' : 'pc-target-ok');
+    st.textContent = has
+      ? '\u26a0 This week already has entries in your planner. Importing will replace them.'
+      : ended ? '\u26a0 This week has already ended.' : '\u2713 This week is empty in your planner.';
+  }
 }
 
 function _pcRenderPreview(kind, d) {
@@ -26645,8 +26731,21 @@ function _pcRenderPreview(kind, d) {
 
   if (kind === 'weekly') {
     return `
+      <div class="pc-target" id="pc-target">
+        <div class="pc-target-row">
+          <label for="pc-target-date">Goes into the week of</label>
+          <span class="pc-target-week" id="pc-target-week"></span>
+          <span class="pc-target-rel" id="pc-target-rel"></span>
+        </div>
+        <div class="pc-target-row" style="margin-top:6px">
+          <label for="pc-target-date" style="font-weight:600;color:var(--muted)">Change:</label>
+          <input type="date" id="pc-target-date" title="Pick any day of the week this plan is for">
+        </div>
+        <div class="pc-target-note" id="pc-target-note"></div>
+        <div id="pc-target-status"></div>
+      </div>
       <h3>Weekly Planner Preview</h3>
-      <span class="pc-pv-badge">${esc(d.weekRange || 'Week range unknown')}</span>
+      <span class="pc-pv-badge">ProCoach page: ${esc(d.weekRange || 'no week shown')}</span>
       ${list('Top 3 Priorities', d.topThree)}
       ${list('Quarterly Actions', d.quarterly)}
       ${v('Success Factor: Current', d.successFactor.current)}
@@ -26717,12 +26816,30 @@ function _pcRenderPreview(kind, d) {
 }
 
 /* ── APPLY: write parsed data into a new week/quarter ── */
-function applyProCoachImport() {
+async function applyProCoachImport() {
   if (!_pcImportParsed) return;
   const { kind, data } = _pcImportParsed;
 
   if (kind === 'weekly') {
-    _pcApplyWeekly(data);
+    const target = _pcImportParsed.target || _pcDefaultTargetWeek(data);
+    if (!isDateKeyStr(target)) { showToast('\u26a0 Pick the week this plan is for.', 6000); return; }
+    try { _saveWeekIfDirty(); } catch (_) {}
+    if (_pcWeekHasContent(target)) {
+      const v = await sbChoice({
+        title: 'Replace the week of ' + _pcWeekLabel(target) + '?',
+        message: 'That week (' + _pcWeekRel(target) + ') already has entries in your planner. Importing replaces them with the ProCoach plan.\n\n' +
+                 'A safety copy is taken first, so this can be rolled back from Snapshots.',
+        buttons: [
+          { label: 'Cancel', hint: 'Go back and check the week.', value: 'cancel', kind: 'primary' },
+          { label: 'Replace that week', hint: 'Its current entries are overwritten.', value: 'go', kind: 'danger' }
+        ],
+        cancelValue: 'cancel'
+      });
+      if (v !== 'go') return;
+      try { maybeAutoBackup(true, true, 'pre'); } catch (_) {}
+    }
+    const _end = new Date(target + 'T12:00:00'); _end.setDate(_end.getDate() + 6);
+    _pcApplyWeekly(Object.assign({}, data, { weekStart: target, weekEnd: dateKey(_end), _confirmed: true }));
   } else if (kind === 'quarterly') {
     _pcApplyQuarterly(data);
   }
@@ -26746,7 +26863,7 @@ function _pcApplyWeekly(d) {
     existing[k] && (typeof existing[k] !== 'object' ||
                     JSON.stringify(existing[k]) !== '{}')
   );
-  if (hasContent) {
+  if (hasContent && !d._confirmed) {
     if (!confirm(`A week starting ${weekKey} already exists in your planner. Overwrite it with the imported data?`)) {
       return;
     }
@@ -26920,7 +27037,7 @@ function _pcApplyWeekly(d) {
 
   closeProCoachImport();
   loadWeek(weekKey, true);
-  showToast(`✓ Imported "${d.weekRange || weekKey}"`);
+  showToast(`✓ Imported into the week of ${_pcWeekLabel(weekKey)}`);
 }
 
 function _pcApplyQuarterly(d) {
@@ -28726,7 +28843,7 @@ function renderInstallRow() {
    One constant, stamped into every page header at boot rather than written
    into four blocks of markup — so bumping it is a one-line change and the
    pages can never disagree about which version they are. */
-const APP_VERSION = 'v1.39';
+const APP_VERSION = 'v1.40';
 function stampAppVersion() {
   document.querySelectorAll('.header-actions').forEach(host => {
     let el = host.querySelector('.app-version');
