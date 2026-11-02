@@ -5986,6 +5986,24 @@ body.companion-locked { overflow: hidden; }
 .keep-select { flex: 1; font-family: inherit; font-size: 14px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; color: var(--ink); }
 .keep-check { display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--muted); margin: 4px 0 2px; cursor: pointer; }
 .keep-preview { font-size: 12.5px; font-weight: 600; color: var(--navy); margin: 10px 0 2px; min-height: 18px; }
+/* v1.38: one row per pasted line, each with its own tick and destination */
+.keep-list { max-height: min(260px, 30vh); overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; margin: 8px 0 4px; }
+/* The row list makes this dialog taller than a laptop screen can show; it
+   must scroll within the window, or the Add button falls off the bottom. */
+#keep-bridge-modal .modal { max-height: calc(100vh - 24px); max-height: calc(100dvh - 24px); overflow-y: auto; }
+#keep-bridge-modal .keep-textarea { min-height: 72px; }
+.keep-list:empty { display: none; }
+.keep-item { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; padding: 7px 9px; border-bottom: 1px solid var(--border); }
+.keep-item:last-child { border-bottom: 0; }
+.keep-item.off .keep-item-text { color: var(--muted); text-decoration: line-through; }
+.keep-item-main { display: flex; align-items: flex-start; gap: 8px; flex: 1 1 200px; min-width: 0; cursor: pointer; font-size: 13.5px; color: var(--ink); line-height: 1.35; }
+.keep-item-main input { margin-top: 2px; width: 17px; height: 17px; flex-shrink: 0; }
+.keep-item-text { overflow-wrap: anywhere; }
+.keep-item-dest { flex: 0 1 190px; font-family: inherit; font-size: 12.5px; padding: 5px 6px; border: 1px solid var(--border); border-radius: 7px; color: var(--ink); background: #fff; }
+.keep-item.off .keep-item-dest { opacity: .5; }
+.keep-item-dupe { flex: 1 1 100%; font-size: 11px; color: #a0602a; padding-left: 25px; }
+.keep-bulk { font-size: 12px; margin: 2px 0 0; }
+.keep-bulk button { background: none; border: 0; padding: 0; color: var(--navy); font: inherit; font-weight: 600; cursor: pointer; text-decoration: underline; }
 .md-row-rate select option { background: white; color: var(--ink); font-weight: 500; }
 
 /* Editable group title */
@@ -16658,15 +16676,17 @@ function openKeepBridge() {
         </div>
 
         <div id="keep-tab-in" class="keep-pane">
-          <p class="keep-hint">Paste a Keep note here, or tap in the box and use your phone keyboard's 🎤 mic to dictate. <strong>Each line becomes one task.</strong></p>
+          <p class="keep-hint">Paste a Keep note here, or tap in the box and use your phone keyboard's 🎤 mic to dictate. <strong>Each line becomes one task</strong> — untick any you don't want, and choose where each one goes.</p>
           <textarea id="keep-in-text" class="keep-textarea" rows="8" placeholder="Line one becomes a task&#10;Line two becomes a task&#10;…"></textarea>
           <div class="keep-row">
-            <label for="keep-in-group">Add to:</label>
-            <select id="keep-in-group" class="keep-select">${groupOpts}</select>
+            <label for="keep-in-group">Send all to:</label>
+            <select id="keep-in-group" class="keep-select">${_keepDestOptions()}</select>
           </div>
           <label class="keep-check"><input type="checkbox" id="keep-in-strip-bullets" checked> Strip leading bullets / dashes / checkboxes</label>
           <label class="keep-check"><input type="checkbox" id="keep-in-skip-dupes" checked> Leave out lines that are already in my lists</label>
           <div class="keep-preview" id="keep-in-preview"></div>
+          <div class="keep-list" id="keep-in-list"></div>
+          <div class="keep-bulk" id="keep-in-bulk" style="display:none"><button type="button" onclick="keepTickAll(true)">Tick all</button> · <button type="button" onclick="keepTickAll(false)">Untick all</button></div>
           <div class="modal-actions">
             <button class="btn btn-outline" type="button" onclick="closeKeepBridge()">Cancel</button>
             <button class="btn btn-navy" type="button" onclick="keepBridgeImport()">Add tasks</button>
@@ -16690,7 +16710,19 @@ function openKeepBridge() {
     // Live preview + live export
     modal.querySelector('#keep-in-text').addEventListener('input', _keepUpdatePreview);
     modal.querySelector('#keep-in-strip-bullets').addEventListener('change', _keepUpdatePreview);
-    modal.querySelector('#keep-in-skip-dupes').addEventListener('change', _keepUpdatePreview);
+    modal.querySelector('#keep-in-skip-dupes').addEventListener('change', () => { _keepRows.forEach(r => { r.touchedCheck = false; }); _keepUpdatePreview(); });
+    // "Send all to" sets every row; after that each row can still be changed on its own.
+    modal.querySelector('#keep-in-group').addEventListener('change', () => { _keepRows.forEach(r => { r.touched = false; }); _keepUpdatePreview(); });
+    const list = modal.querySelector('#keep-in-list');
+    list.addEventListener('change', e => {
+      const t = e.target, i = Number(t && t.dataset && t.dataset.i);
+      const r = _keepRows[i];
+      if (!r) return;
+      if (t.dataset.k === 'chk') { r.checked = t.checked; r.touchedCheck = true; }
+      if (t.dataset.k === 'dest') { r.dest = t.value; r.touched = true; }
+      const row = t.closest('.keep-item'); if (row) row.classList.toggle('off', !r.checked);
+      _keepCountLine();
+    });
     modal.querySelector('#keep-out-group').addEventListener('change', _keepBuildExport);
     modal.querySelector('#keep-out-open').addEventListener('change', _keepBuildExport);
   }
@@ -16732,34 +16764,124 @@ function _keepSkipDupes() {
   const cb = document.getElementById('keep-in-skip-dupes');
   return !cb || cb.checked;
 }
-function _keepUpdatePreview() {
-  const lines = _keepParseLines();
+
+/* v1.38 — every line is its own row: a tick to include it, and its own
+   destination. "Send all to" sets every row at once, and any row can then
+   be pointed somewhere else. Promises Made is a destination too, for the
+   business or personal list. */
+const KEEP_PROMISE_DESTS = { 'promise:business': 'Promises Made \u2014 Business', 'promise:personal': 'Promises Made \u2014 Personal' };
+function _keepDestLabel(d) { return KEEP_PROMISE_DESTS[d] || MIND_DUMP_GROUP_LABELS[d] || d; }
+function _keepDestOptions(selected) {
+  const opt = (v, l) => `<option value="${v}"${v === selected ? ' selected' : ''}>${escapeHtml(l)}</option>`;
+  return '<optgroup label="Mind Dump">' + MIND_DUMP_GROUPS.map(g => opt(g, MIND_DUMP_GROUP_LABELS[g])).join('') + '</optgroup>' +
+         '<optgroup label="Promises Made">' + Object.keys(KEEP_PROMISE_DESTS).map(d => opt(d, KEEP_PROMISE_DESTS[d])).join('') + '</optgroup>';
+}
+let _keepRows = [];
+/* Where each text already is: anywhere in the Mind Dump, or among the promises. */
+function _keepWhereAlready() {
+  const where = new Map();
+  try {
+    const idx = mdBuildTextIndex(mdIsPageOpen() ? readMindDumpFromDOM() : loadMindDump());
+    idx.forEach((hit, k) => where.set(k, hit.label + (hit.archived ? ' (archived)' : '')));
+  } catch (_) {}
+  ['business', 'personal'].forEach(m => {
+    try { loadPromises(m).forEach(p => { const k = mdNormText(p.what || ''); if (k && !where.has(k)) where.set(k, KEEP_PROMISE_DESTS['promise:' + m]); }); } catch (_) {}
+  });
+  return where;
+}
+function _keepCountLine() {
   const el = document.getElementById('keep-in-preview');
   if (!el) return;
-  if (!lines.length) { el.textContent = 'Paste or dictate some lines above.'; return; }
-  // v1.13: say how many are already in the Mind Dump and will be left out.
-  let keep = lines.length, dup = 0;
-  if (_keepSkipDupes()) {
-    try {
-      const r = mdSortOutDupes(lines, mdIsPageOpen() ? readMindDumpFromDOM() : loadMindDump());
-      keep = r.keep.length; dup = r.skipped.length;
-    } catch (_) {}
-  }
-  el.textContent = `${keep} task${keep !== 1 ? 's' : ''} will be added.` +
-    (dup ? ` ${dup} ${dup === 1 ? 'is' : 'are'} already in your lists and will be left out.` : '');
+  if (!_keepRows.length) { el.textContent = 'Paste or dictate some lines above.'; return; }
+  const on = _keepRows.filter(r => r.checked);
+  const per = new Map();
+  on.forEach(r => per.set(r.dest, (per.get(r.dest) || 0) + 1));
+  el.textContent = on.length + ' of ' + _keepRows.length + ' ticked' +
+    (per.size ? ' \u2014 ' + Array.from(per, ([d, n]) => n + ' to ' + _keepDestLabel(d)).join(', ') : '');
 }
+function _keepUpdatePreview() {
+  const list = document.getElementById('keep-in-list');
+  const bulk = document.getElementById('keep-in-bulk');
+  const allEl = document.getElementById('keep-in-group');
+  const all = (allEl && allEl.value) || KEEP_BRIDGE_DEFAULT_GROUP;
+  // Choices already made for a line are kept while the box is edited.
+  const prev = new Map();
+  _keepRows.forEach(r => { if (!prev.has(r.key)) prev.set(r.key, r); });
+  const where = _keepWhereAlready(), seen = new Set();
+  _keepRows = _keepParseLines().map(text => {
+    const key = mdNormText(text);
+    const dupe = where.get(key) || (seen.has(key) ? 'this list already' : '');
+    seen.add(key);
+    const p = prev.get(key) || {};
+    return {
+      text, key, dupe,
+      dest: p.touched ? p.dest : all, touched: !!p.touched,
+      checked: p.touchedCheck ? p.checked : !(dupe && _keepSkipDupes()), touchedCheck: !!p.touchedCheck
+    };
+  });
+  if (list) list.innerHTML = _keepRows.map((r, i) =>
+    `<div class="keep-item${r.checked ? '' : ' off'}">` +
+      `<label class="keep-item-main"><input type="checkbox" data-k="chk" data-i="${i}"${r.checked ? ' checked' : ''}><span class="keep-item-text">${escapeHtml(r.text)}</span></label>` +
+      `<select class="keep-item-dest" data-k="dest" data-i="${i}" aria-label="Send this line to">${_keepDestOptions(r.dest)}</select>` +
+      (r.dupe ? `<div class="keep-item-dupe">Already in ${escapeHtml(r.dupe)}</div>` : '') +
+    `</div>`).join('');
+  if (bulk) bulk.style.display = _keepRows.length > 1 ? '' : 'none';
+  _keepCountLine();
+}
+function keepTickAll(on) {
+  _keepRows.forEach(r => { r.checked = !!on; r.touchedCheck = true; });
+  _keepUpdatePreview();
+}
+
+/* Add lines to a Promises Made list. Who and the date are left blank to fill
+   in on the Mind Dump page, where the list lives. */
+function _keepAddPromises(lines, mode) {
+  try { flushPendingPromises(); } catch (_) {}
+  const stamp = new Date().toISOString();
+  const arr = loadPromises(mode);
+  lines.forEach(t => arr.push({ who: '', what: t, byDate: '', done: false, addedAt: stamp }));
+  savePromises(mode, arr);
+  return () => {
+    const keep = loadPromises(mode).filter(p => !(p.addedAt === stamp && lines.includes(p.what)));
+    savePromises(mode, keep);
+  };
+}
+
 function keepBridgeImport() {
-  const lines = _keepParseLines();
-  if (!lines.length) { showToast('⚠ Nothing to import — paste or dictate some lines'); return; }
-  const group = document.getElementById('keep-in-group').value || KEEP_BRIDGE_DEFAULT_GROUP;
-  // v1.13: one routine adds lines to a section for both this box and a paste
-  // straight into Unfiltered Ideas (mdAddLines). As before: new lines go to
-  // the top of the section above its first heading; lines sent to Daily Top 3
-  // go into Notes, never over the three priorities. New: lines already in the
-  // Mind Dump are left out, and the import can be undone.
-  const res = mdAddLines(lines, group, { dedupe: _keepSkipDupes() });
+  const rows = _keepRows.filter(r => r.checked);
+  if (!_keepRows.length) { showToast('\u26a0 Nothing to import \u2014 paste or dictate some lines'); return; }
+  if (!rows.length) { showToast('\u26a0 Nothing is ticked'); return; }
+  // Group by destination, keeping the pasted order within each.
+  const byDest = new Map();
+  rows.forEach(r => { if (!byDest.has(r.dest)) byDest.set(r.dest, []); byDest.get(r.dest).push(r.text); });
+  const undos = [], parts = [];
+  let promisesTouched = false;
+  byDest.forEach((lines, dest) => {
+    if (KEEP_PROMISE_DESTS[dest]) {
+      undos.push(_keepAddPromises(lines, dest.slice(8)));
+      promisesTouched = true;
+      parts.push(lines.length + ' to ' + _keepDestLabel(dest));
+      return;
+    }
+    // Duplicates were shown on each row and left unticked by default; a
+    // ticked one was chosen on purpose, so it is not filtered out again.
+    const res = mdAddLines(lines, dest, { dedupe: false });
+    if (res.added.length) { parts.push(res.added.length + ' to ' + _keepDestLabel(dest)); if (res.undo) undos.push(res.undo); }
+  });
+  if (promisesTouched) {
+    try { renderPromises(); } catch (_) {}
+    try { updateMindDumpHeaderBadges(); } catch (_) {}
+  }
+  // Clear the box, so reopening it later cannot add the same lines twice.
+  const ta = document.getElementById('keep-in-text');
+  if (ta) ta.value = '';
+  _keepRows = [];
   closeKeepBridge();
-  _mdReportAdd(res, group, null, 'task');
+  if (!parts.length) { showToast('Nothing to add'); return; }
+  showUndoToast('\u2713 Added ' + parts.join(', '), () => {
+    undos.forEach(u => { try { u(); } catch (_) {} });
+    if (promisesTouched) { try { renderPromises(); } catch (_) {} try { updateMindDumpHeaderBadges(); } catch (_) {} }
+  });
 }
 
 /* Build the export text for the chosen group. */
@@ -28511,7 +28633,7 @@ function renderInstallRow() {
    One constant, stamped into every page header at boot rather than written
    into four blocks of markup — so bumping it is a one-line change and the
    pages can never disagree about which version they are. */
-const APP_VERSION = 'v1.37';
+const APP_VERSION = 'v1.38';
 function stampAppVersion() {
   document.querySelectorAll('.header-actions').forEach(host => {
     let el = host.querySelector('.app-version');
