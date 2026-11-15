@@ -5978,50 +5978,85 @@ body.companion-locked { overflow: hidden; }
 }
 .keep-tab.active { background: var(--navy); color: #fff; border-color: var(--navy); }
 .keep-hint { font-size: 12.5px; color: var(--muted); line-height: 1.55; margin: 0 0 10px; }
-/* ══ v1.41 ══ Job Log — a plain list of the jobs I do: one line each, with an
-   optional heading, a 1-2-3 for how hard it is, and roughly how long it takes. */
-#joblog-modal .modal { max-width: 900px; width: 96%; padding: 22px 24px; max-height: calc(100vh - 24px); max-height: calc(100dvh - 24px); display: flex; flex-direction: column; }
+/* ══ v1.42 ══ Job Log — a plain list of the jobs I do: one line each, under a
+   heading and sub-heading, with how long it takes and a 1-2-3 for how hard it is. */
+#joblog-modal .modal { max-width: 980px; width: 96%; padding: 22px 24px; max-height: calc(100vh - 24px); max-height: calc(100dvh - 24px); display: flex; flex-direction: column; }
 .jl-hint { font-size: 12.5px; color: var(--muted); line-height: 1.5; margin: 0 0 10px; }
 .jl-add { display: flex; gap: 8px; margin-bottom: 8px; }
 .jl-add input[type=text] { flex: 1; min-width: 0; font-family: inherit; font-size: 14px; padding: 9px 11px; border: 1px solid var(--border); border-radius: 8px; color: var(--ink); }
-.jl-add input[type=text]:focus, .jl-tools input:focus, .jl-tools select:focus { outline: none; border-color: var(--navy); }
+.jl-add input[type=text]:focus, .jl-tools input:focus, .jl-tools select:focus, .jl-f:focus { outline: none; border-color: var(--navy); }
 .jl-paste { display: none; margin-bottom: 8px; }
 .jl-paste.open { display: block; }
 .jl-paste-row { display: flex; gap: 8px; align-items: center; margin-top: 6px; flex-wrap: wrap; }
-.jl-paste-row label { font-size: 12.5px; color: var(--muted); }
-.jl-paste-row input[type=text] { font-family: inherit; font-size: 13px; padding: 6px 9px; border: 1px solid var(--border); border-radius: 7px; width: 190px; }
 .jl-tools { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 4px 0 8px; }
 .jl-tools input[type=text], .jl-tools select { font-family: inherit; font-size: 13px; padding: 7px 9px; border: 1px solid var(--border); border-radius: 7px; color: var(--ink); background: #fff; }
 .jl-tools input[type=text] { flex: 1 1 160px; min-width: 0; }
 .jl-count { font-size: 12.5px; color: var(--muted); margin-left: auto; white-space: nowrap; }
-.jl-list { flex: 1 1 auto; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; min-height: 120px; background: #fff; }
+.jl-list { flex: 1 1 auto; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; min-height: 140px; background: #fff; }
 .jl-empty { padding: 26px 18px; text-align: center; color: var(--muted); font-size: 13.5px; line-height: 1.6; }
-.jl-group { background: var(--navy); color: #fff; font-size: 12px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; padding: 5px 10px; display: flex; justify-content: space-between; gap: 10px; position: sticky; top: 0; z-index: 1; }
-.jl-group span { font-weight: 400; text-transform: none; letter-spacing: 0; opacity: .85; }
-.jl-row { display: grid; grid-template-columns: minmax(0, 1fr) 150px 84px 74px 26px; gap: 8px; align-items: center; padding: 5px 8px 5px 10px; border-bottom: 1px solid var(--sky-light); }
-.jl-row:nth-child(even) { background: var(--cream); }
-.jl-row:hover { background: #fdf7e3; }
-.jl-text { font-size: 14px; line-height: 1.4; color: var(--ink); padding: 3px 4px; border-radius: 5px; outline: none; overflow-wrap: anywhere; white-space: pre-wrap; cursor: text; }
-.jl-text:focus { background: #fff; box-shadow: 0 0 0 1.5px var(--navy); }
-.jl-head, .jl-mins { font-family: inherit; font-size: 12.5px; padding: 4px 6px; border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--navy); min-width: 0; width: 100%; box-sizing: border-box; }
-.jl-mins { text-align: right; color: var(--ink); }
-.jl-head::placeholder, .jl-mins::placeholder { color: #a9b4c2; }
-.jl-row:hover .jl-head, .jl-row:hover .jl-mins, .jl-head:focus, .jl-mins:focus { border-color: var(--border); background: #fff; outline: none; }
-.jl-lvl { display: inline-flex; border: 1px solid var(--border); border-radius: 7px; overflow: hidden; background: #fff; }
+.jl-cols, .jl-row { display: grid; grid-template-columns: 74px 84px minmax(0, 1fr) 68px; gap: 10px; align-items: center; padding: 5px 10px; }
+.jl-list.flat .jl-cols, .jl-list.flat .jl-row { grid-template-columns: 74px 84px minmax(0, 1fr) 190px 68px; }
+.jl-cols { position: sticky; top: 0; z-index: 3; background: var(--cream); border-bottom: 2px solid var(--gold); font-size: 11px; font-weight: 700; letter-spacing: .6px; text-transform: uppercase; color: var(--navy); padding-top: 7px; padding-bottom: 6px; }
+.jl-group { background: var(--navy); color: #fff; font-size: 12.5px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; padding: 6px 10px; display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; border: none; width: 100%; font-family: inherit; text-align: left; }
+.jl-subgroup { background: #fff7df; color: var(--navy); font-size: 12px; font-weight: 700; padding: 5px 10px 5px 24px; display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; border: none; border-bottom: 1px solid #ecdca6; width: 100%; font-family: inherit; text-align: left; }
+.jl-group .jl-n, .jl-subgroup .jl-n { margin-left: auto; font-weight: 400; text-transform: none; letter-spacing: 0; opacity: .85; font-size: 12px; }
+.jl-caret { display: inline-block; width: 10px; transition: transform .12s; }
+.shut > .jl-caret { transform: rotate(-90deg); }
+.jl-row { border-bottom: 1px solid var(--sky-light); }
+.jl-row:hover { background: #fdf9ea; }
+.jl-row.editing { background: #fdf4d4; }
+.jl-text { font-size: 14px; line-height: 1.4; color: var(--ink); overflow-wrap: anywhere; }
+.jl-det { font-size: 12.5px; line-height: 1.4; color: var(--muted); margin-top: 2px; white-space: pre-wrap; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.jl-where { font-size: 12.5px; color: var(--navy); overflow-wrap: anywhere; }
+.jl-mins { font-family: inherit; font-size: 12.5px; padding: 4px 6px; border: 1px solid var(--border); border-radius: 6px; background: #fff; color: var(--ink); min-width: 0; width: 100%; box-sizing: border-box; }
+.jl-mins::placeholder { color: #b4bdc9; }
+.jl-mins:focus { outline: none; border-color: var(--navy); }
+.jl-lvl { display: inline-flex; border: 1px solid var(--border); border-radius: 7px; overflow: hidden; background: #fff; justify-self: start; }
 .jl-lvl button { border: none; background: transparent; font-family: inherit; font-size: 12.5px; font-weight: 700; color: #9aa7b8; width: 27px; height: 24px; padding: 0; cursor: pointer; }
 .jl-lvl button + button { border-left: 1px solid var(--border); }
 .jl-lvl button.on[data-l="1"] { background: #4f8265; color: #fff; }
 .jl-lvl button.on[data-l="2"] { background: var(--gold); color: #fff; }
 .jl-lvl button.on[data-l="3"] { background: #b5483a; color: #fff; }
-.jl-del { border: none; background: transparent; color: #b9c3d0; font-size: 14px; cursor: pointer; padding: 2px; border-radius: 5px; }
-.jl-del:hover { color: #b5483a; background: #fbeeee; }
+.jl-edit { border: 1px solid var(--border); background: #fff; color: var(--navy); font-family: inherit; font-size: 12px; font-weight: 600; padding: 4px 8px; border-radius: 6px; cursor: pointer; white-space: nowrap; }
+.jl-edit:hover { border-color: var(--navy); }
+.jl-editor { background: #fdf4d4; border-bottom: 2px solid var(--gold); padding: 10px 12px 12px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; }
+.jl-editor label { font-size: 11px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; color: var(--navy); display: block; margin-bottom: 3px; }
+.jl-editor .wide { grid-column: 1 / -1; }
+.jl-f { font-family: inherit; font-size: 13.5px; padding: 7px 9px; border: 1px solid var(--border); border-radius: 7px; color: var(--ink); background: #fff; width: 100%; box-sizing: border-box; }
+textarea.jl-f { resize: vertical; line-height: 1.45; }
+.jl-editor-btns { display: flex; gap: 8px; align-items: center; }
+.jl-editor-btns .jl-remove { margin-left: auto; color: #b5483a; border-color: #e3b9b2; }
 .jl-foot { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 12px; }
 .jl-foot .jl-key { font-size: 12px; color: var(--muted); margin-right: auto; }
+/* Reviewing a pasted note */
+#joblog-modal .jl-review { display: none; flex-direction: column; min-height: 0; flex: 1 1 auto; }
+#joblog-modal.reviewing .jl-review { display: flex; }
+#joblog-modal.reviewing .jl-main { display: none; }
+#joblog-modal .jl-main { display: flex; flex-direction: column; min-height: 0; flex: 1 1 auto; }
+.jl-rv-list { flex: 1 1 auto; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; background: #fff; }
+.jl-rv { display: grid; grid-template-columns: 22px minmax(0, 1fr) 170px 170px; gap: 6px 8px; align-items: center; padding: 7px 10px; border-bottom: 1px solid var(--sky-light); border-left: 4px solid #4f8265; }
+.jl-rv.similar { border-left-color: var(--gold); background: #fffaf0; }
+.jl-rv.dupe, .jl-rv.exact { border-left-color: #b5483a; background: #fdf3f1; }
+.jl-rv.off .jl-f { opacity: .55; }
+.jl-rv input[type=checkbox] { width: 16px; height: 16px; }
+.jl-rv .jl-f { font-size: 13px; padding: 5px 8px; }
+.jl-rv-flag { grid-column: 2 / -1; font-size: 12px; color: var(--muted); }
+.jl-rv-flag b { color: #b5483a; }
+.jl-rv.similar .jl-rv-flag b { color: #8a6d1d; }
+.jl-rv-head { display: grid; grid-template-columns: 22px minmax(0, 1fr) 170px 170px; gap: 8px; padding: 6px 10px 6px 14px; font-size: 11px; font-weight: 700; letter-spacing: .6px; text-transform: uppercase; color: var(--navy); background: var(--cream); border-bottom: 2px solid var(--gold); position: sticky; top: 0; z-index: 1; }
 @media (max-width: 700px) {
   #joblog-modal .modal { padding: 16px 12px; }
-  .jl-row { grid-template-columns: minmax(0, 1fr) 84px 62px 26px; }
-  .jl-text { grid-column: 1 / -1; }
-  .jl-head { grid-column: 1; }
+  .jl-cols { display: none; }
+  .jl-row, .jl-list.flat .jl-row { grid-template-columns: 70px 84px minmax(0, 1fr) auto; }
+  .jl-job { grid-column: 1 / -1; grid-row: 2; }
+  .jl-where { grid-column: 1 / -1; grid-row: 3; }
+  .jl-edit { grid-column: 4; grid-row: 1; }
+  .jl-editor { grid-template-columns: 1fr; }
+  .jl-rv, .jl-rv-head { grid-template-columns: 22px minmax(0, 1fr) minmax(0, 1fr); }
+  .jl-rv-head span:nth-child(2) { grid-column: 2 / -1; }
+  .jl-rv-head span:nth-child(n+3) { display: none; }
+  .jl-rv .jl-rv-text { grid-column: 2 / -1; }
+  .jl-rv .jl-rv-h { grid-column: 2; }
 }
 .keep-textarea {
   width: 100%; box-sizing: border-box; font-family: inherit; font-size: 14px; line-height: 1.5;
@@ -16711,17 +16746,19 @@ function saveAssignModal() {
 //  and Google Keep's voice notes / the car's memo.
 // ═══════════════════════════════════════════════════════════════════
 // ═══════════════════════════════════════════════════════════════════
-//  v1.41 — JOB LOG
-//  A plain list of the jobs I do, for scanning rather than doing: one line
-//  per job, an optional heading (Accounting, IT…), a 1-2-3 for how hard it
-//  is, and roughly how long it takes. Lines are typed, pasted from a Google
-//  Keep note, or sent from the Keep / voice bridge. Nothing here is a task:
-//  it never appears in a week, the Top 3 or the Mind Dump.
-//  Storage: sb_job_log — [{ id, text, heading, level (0-3), mins, added, mod }]
+//  v1.41 — JOB LOG   (v1.42: column headings, headings and sub-headings,
+//  an Edit panel with room for details, and a review step on paste that
+//  suggests where each line belongs and flags likely duplicates)
+//  A plain list of the jobs I do, for scanning rather than doing. Lines are
+//  typed, pasted from a Google Keep note, or sent from the Keep / voice
+//  bridge. Nothing here is a task: it never appears in a week, the Top 3 or
+//  the Mind Dump.
+//  Storage: sb_job_log — [{ id, text, heading, sub, level (0-3), mins, details, added, mod }]
 // ═══════════════════════════════════════════════════════════════════
 const JOB_LOG_KEY = 'sb_job_log';
 const JL_LEVELS = { 1: 'Easy', 2: 'Medium', 3: 'Hard' };
-let _jlSort = 'added', _jlFilter = '';
+let _jlSort = 'heading', _jlFilter = '', _jlEditing = null, _jlReview = null;
+const _jlShut = new Set();          // collapsed headings / sub-headings, this session
 
 function loadJobLog() {
   try {
@@ -16734,7 +16771,8 @@ function saveJobLog(arr) {
   try { if (typeof syncUploadDebounced === 'function') syncUploadDebounced(); } catch (_) {}
 }
 function _jlNorm(t) { try { return mdNormText(t); } catch (_) { return String(t || '').trim().toLowerCase().replace(/\s+/g, ' '); } }
-function _jlClean(t) { return String(t == null ? '' : t).replace(/\s+/g, ' ').trim().slice(0, 600); }
+function _jlClean(t, max) { return String(t == null ? '' : t).replace(/\s+/g, ' ').trim().slice(0, max || 600); }
+function _jlCleanMulti(t) { return String(t == null ? '' : t).replace(/\r\n?/g, '\n').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim().slice(0, 4000); }
 
 /* "45", "45m", "1.5h", "2 hrs", "1:30", "1h 20" → minutes; anything else → null */
 function jlParseMins(s) {
@@ -16755,55 +16793,178 @@ function jlFmtMins(n) {
   return h + ' h' + (r ? ' ' + r : '');
 }
 
-/* Add lines. Lines already in the log (same words) are left out.
-   → { added, skipped, undo } */
+/* ── Telling when two lines are the same job, and where a line belongs ──
+   Exact matching misses the same job written two ways ("CC payments weekly"
+   vs "Early and regular payments to CCs"). Words are cut to a short stem,
+   filler and how-often words are dropped, and rarer words count for more. */
+const JL_STOP = new Set(('a an and or the of to for in on at by with from as is are be been was were it its this that these those ' +
+  'there their them they we our us i my me you your he she his her any all some each every other others ' +
+  'do does doing done make making made sure need needs needed should would could can will may might must ' +
+  'get getting got go going have has having into out up down over under about after before then than also ' +
+  'just only so such very more most many much etc various general generally things thing stuff ' +
+  'deal dealing dealt handle handling regular regularly early late often sometimes when where which who whom how what why ' +
+  'daily weekly biweekly monthly quarterly yearly annual annually year years month months week weeks day days ' +
+  'new if not no yes else set setting sets using use keep keeping take taking ensure ensuring multiple several').split(/\s+/));
+const JL_KEEP_SHORT = new Set(['cra', 'gst', 'hst', 'pst', 't4', 't4s', 'ups', 'eft', 'hsa', 'dyk', 'qbo', 'cc', 'ccs', 'pos', 'it', 'hr', 'ap', 'ar', 'pc', 'tv']);
+const JL_ABBR = { cc: 'creditcard', ccs: 'creditcard', qbo: 'quickb', 'e-mail': 'email', emails: 'email', t4s: 't4' };
+function _jlStem(w) {
+  if (w.length <= 3) return w;
+  const strip = [['ations', 3], ['ation', 3], ['ments', 3], ['ment', 3], ['ings', 3], ['ing', 3], ['ions', 3], ['ion', 3], ['ies', 3], ['ers', 3], ['er', 4], ['ed', 3], ['es', 4], ['s', 3]];
+  for (const [suf, min] of strip) {
+    if (w.endsWith(suf) && w.length - suf.length >= min && !(suf === 's' && w.endsWith('ss'))) { w = w.slice(0, -suf.length); if (suf === 'ies') w += 'y'; break; }
+  }
+  if (w.length > 3 && w[w.length - 1] === w[w.length - 2] && !/[aeiouls]/.test(w[w.length - 1])) w = w.slice(0, -1);
+  return w.slice(0, 6);
+}
+function jlTokens(text) {
+  const out = [];
+  String(text || '').toLowerCase().replace(/[’']s\b/g, '').replace(/\bcredit[ -]?cards?\b/g, 'creditcard')
+    .split(/[^a-z0-9-]+/).forEach(w => {
+      w = w.replace(/^-+|-+$/g, '');
+      if (!w) return;
+      if (JL_ABBR[w]) { out.push(JL_ABBR[w]); return; }
+      if (JL_STOP.has(w)) return;
+      if (w.length < 3 && !JL_KEEP_SHORT.has(w)) return;
+      out.push(w === 'creditcard' ? w : _jlStem(w));
+    });
+  return Array.from(new Set(out));
+}
+function _jlWeigher(texts) {
+  const df = new Map();
+  texts.forEach(t => jlTokens(t).forEach(k => df.set(k, (df.get(k) || 0) + 1)));
+  const N = Math.max(texts.length, 1);
+  return k => Math.log(1 + N / (df.get(k) || 1));
+}
+/* score: how much of the shorter line the other covers; both: how much of the longer one. */
+function _jlSim(a, b, w) {
+  if (!a.length || !b.length) return { score: 0, both: 0 };
+  const B = new Set(b); let shared = 0, sa = 0, sb = 0;
+  a.forEach(k => { const x = w(k); sa += x; if (B.has(k)) shared += x; });
+  b.forEach(k => { sb += w(k); });
+  return { score: shared / Math.min(sa, sb), both: shared / Math.max(sa, sb) };
+}
+/* Words that point at an area, and the heading to suggest when the log has
+   none of its own for it. Earlier rows are the more specific ones. */
+const JL_AREAS = [
+  { line: /\b(payroll|t4s?|payworks|wheniwork|pay ?periods?|roes?|paycheques?|paychecks?)\b/, name: /payroll|wages/, h: 'Accounting', s: 'Payroll' },
+  { line: /\b(gst|hst|pst|cra|tax(es)?|t2|audits?|remittances?)\b/, name: /\btax|\bcra\b|gst/, h: 'Accounting', s: 'Tax & CRA' },
+  { line: /\b(quickbooks|qbo|bookkeep\w*|journal entr\w*|ledger|accounts payable|payables?|invoices?)\b/, name: /bookkeep|quickbooks|ledger|payable/, h: 'Accounting', s: 'Bookkeeping' },
+  { line: /\b(banks?|banking|deposits?|ccs?|credit[ -]?cards?|reconcil\w*|eft|transfers?|withdrawals?)\b/, name: /bank|credit|card/, h: 'Accounting', s: 'Banking & credit cards' },
+  { line: /\b(hsa|benefits?|health spending|insurance)\b/, name: /benefit|hsa|insur/, h: 'Staff', s: 'Benefits' },
+  { line: /\b(e-?mails?|spam|software|windows|computers?|pcs?|printers?|network|firewall|postbox|firebox|wi-?fi|backups?|passwords?)\b/, name: /\bit\b|e-?mail|computer|tech/, h: 'IT & Email', s: '' },
+  { line: /\b(google|reviews?|website|web ?site|facebook|instagram|social media|holiday hours|calendar)\b/, name: /online|web|social|marketing|google/, h: 'Online presence', s: '' },
+  { line: /\b(fedex|ups|canada post|purolator|shipping|shipments?|couriers?|brokerage)\b/, name: /ship|courier/, h: 'Shipping', s: '' },
+  { line: /\b(orders?|ordering|suppliers?|distributors?|dyk|restock\w*|purchas\w*|special orders?)\b/, name: /order|purchas|buying/, h: 'Purchasing', s: '' },
+  { line: /\b(construction|renovat\w*|building|fixtures?|shelv\w*|landlord|lease|hvac|plumbing|signage)\b/, name: /build|facilit|premises/, h: 'Building', s: '' },
+  { line: /\b(repairs?|boiler|equipment|maintenance|broken|servic(e|ing))\b/, name: /maint|repair/, h: 'Building', s: 'Maintenance' },
+  { line: /\b(hiring|interviews?|schedul\w*|staff|employees?|training|performance reviews?)\b/, name: /staff|\bhr\b|people|team/, h: 'Staff', s: '' },
+  { line: /\b(customers?|products?|questions)\b/, name: /customer|sales|product/, h: 'Customer service', s: '' },
+  { line: /\b(accounting|accounts?|financ\w*|money|funds)\b/, name: /account|financ/, h: 'Accounting', s: '' }
+];
+/* Where a new line probably belongs, and what it may duplicate.
+   `pool` is the lines to compare with: [{ text, heading, sub }].
+   → { heading, sub, why, flag: 'new' | 'similar' | 'dupe' | 'exact', match } */
+function jlSuggest(text, pool, w) {
+  const toks = jlTokens(text), key = _jlNorm(text);
+  let best = null, bestHome = null, exact = null;
+  pool.forEach(p => {
+    if (_jlNorm(p.text) === key) { exact = exact || p; return; }
+    const s = _jlSim(toks, p._t || (p._t = jlTokens(p.text)), w);
+    if (!best || s.score > best.s.score || (s.score === best.s.score && s.both > best.s.both)) best = { p, s };
+    if (p.heading && s.score >= 0.5 && s.both >= 0.25 && (!bestHome || s.score > bestHome.s.score)) bestHome = { p, s };
+  });
+  const out = { heading: '', sub: '', why: '', flag: 'new', match: null };
+  if (exact) { out.flag = 'exact'; out.match = exact; out.heading = exact.heading || ''; out.sub = exact.sub || ''; return out; }
+  if (best && best.s.score >= 0.8 && best.s.both >= 0.6) { out.flag = 'dupe'; out.match = best.p; }
+  else if (best && best.s.score >= 0.5 && best.s.both >= 0.3) { out.flag = 'similar'; out.match = best.p; }
+  if (bestHome) { out.heading = bestHome.p.heading; out.sub = bestHome.p.sub || ''; out.why = 'like a line already there'; return out; }
+  // by the words in it — preferring a heading the log already uses for that area
+  const t = String(text || '').toLowerCase();
+  let area = null, top = 0;
+  JL_AREAS.forEach((a, i) => {
+    const n = Math.min(2, (t.match(new RegExp(a.line.source, 'g')) || []).length);
+    const sc = n ? n * 1000 + (JL_AREAS.length - i) * 10 : 0;
+    if (sc > top) { top = sc; area = a; }
+  });
+  if (!area) return out;
+  const mine = pool.find(p => p.sub && area.name.test(p.sub.toLowerCase())) || pool.find(p => p.heading && area.name.test(p.heading.toLowerCase()));
+  if (mine) { out.heading = mine.heading; out.sub = (mine.sub && area.name.test(mine.sub.toLowerCase())) ? mine.sub : ''; }
+  else { out.heading = area.h; out.sub = area.s; }
+  out.why = 'from the wording';
+  return out;
+}
+
+/* Add lines: strings, or { text, heading, sub }. Lines already in the log
+   (same words) are left out. → { added, skipped, undo } */
 function jlAddLines(lines, heading) {
   const arr = loadJobLog();
   const have = new Set(arr.map(j => _jlNorm(j.text)));
   const today = (typeof todayDateKey === 'function') ? todayDateKey() : new Date().toISOString().slice(0, 10);
   const ids = new Set(); let skipped = 0;
-  const head = _jlClean(heading).slice(0, 60);
-  (lines || []).forEach(t => {
-    t = _jlClean(t);
-    const k = _jlNorm(t);
+  (lines || []).forEach(l => {
+    const o = (l && typeof l === 'object') ? l : { text: l, heading: heading, sub: '' };
+    const t = _jlClean(o.text), k = _jlNorm(t);
     if (!t) return;
     if (have.has(k)) { skipped++; return; }
     have.add(k);
     const id = 'j' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
     ids.add(id);
-    arr.push({ id, text: t, heading: head, level: 0, mins: null, added: today, mod: Date.now() });
+    const h = _jlClean(o.heading, 60);
+    arr.push({ id, text: t, heading: h, sub: h ? _jlClean(o.sub, 60) : '', level: 0, mins: null, details: '', added: today, mod: Date.now() });
   });
   if (ids.size) saveJobLog(arr);
   return { added: ids.size, skipped, undo: () => { saveJobLog(loadJobLog().filter(j => !ids.has(j.id))); _jlRender(); } };
 }
+/* Lines sent from the Keep / voice bridge get a suggested heading too. */
+function jlAddSuggested(lines) {
+  const pool = loadJobLog().map(j => ({ text: j.text, heading: j.heading || '', sub: j.sub || '' }));
+  const w = _jlWeigher(pool.map(p => p.text).concat(lines));
+  return jlAddLines(lines.map(t => { const s = jlSuggest(t, pool, w); const o = { text: t, heading: s.heading, sub: s.sub }; pool.push(o); return o; }));
+}
 function _jlStripBullet(l) { return String(l).trim().replace(/^[\s]*(?:[-*•·▪◦]|\[[ xX]?\]|☐|☑|\d+[.)])\s+/, '').trim(); }
 
-function _jlHeadings() {
+function _jlUniq(vals) {
   const m = new Map();
-  loadJobLog().forEach(j => { const h = _jlClean(j.heading); if (h && !m.has(h.toLowerCase())) m.set(h.toLowerCase(), h); });
+  vals.forEach(v => { v = _jlClean(v, 60); if (v && !m.has(v.toLowerCase())) m.set(v.toLowerCase(), v); });
   return Array.from(m.values()).sort((a, b) => a.localeCompare(b));
 }
-/* The list in the order chosen. → [{ group, items }] (one group unless sorted by heading) */
-function _jlArranged(sort, filter) {
-  let arr = loadJobLog();
+function _jlHeadings() { return _jlUniq(loadJobLog().map(j => j.heading).concat((_jlReview || []).map(r => r.heading))); }
+function _jlSubs() { return _jlUniq(loadJobLog().map(j => j.sub).concat((_jlReview || []).map(r => r.sub))); }
+
+/* The list in the order chosen. Sorted by heading it comes back as
+   [{ heading, subs: [{ sub, items }] }]; otherwise one flat list. */
+function _jlFiltered(filter) {
   const q = _jlNorm(filter || '');
-  if (q) arr = arr.filter(j => (_jlNorm(j.text) + ' ' + _jlNorm(j.heading)).indexOf(q) >= 0);
+  const arr = loadJobLog();
+  return q ? arr.filter(j => [j.text, j.heading, j.sub, j.details].map(_jlNorm).join(' ').indexOf(q) >= 0) : arr;
+}
+function _jlFlat(sort, filter) {
+  const arr = _jlFiltered(filter);
   const idx = new Map(arr.map((j, i) => [j.id, i]));
   const by = {
-    added:   (a, b) => idx.get(a.id) - idx.get(b.id),
-    newest:  (a, b) => idx.get(b.id) - idx.get(a.id),
-    az:      (a, b) => a.text.localeCompare(b.text),
-    hard:    (a, b) => (b.level || 0) - (a.level || 0) || idx.get(a.id) - idx.get(b.id),
-    easy:    (a, b) => ((a.level || 9) - (b.level || 9)) || idx.get(a.id) - idx.get(b.id),
-    long:    (a, b) => (b.mins || 0) - (a.mins || 0) || idx.get(a.id) - idx.get(b.id),
-    heading: (a, b) => idx.get(a.id) - idx.get(b.id)
+    added:  (a, b) => idx.get(a.id) - idx.get(b.id),
+    newest: (a, b) => idx.get(b.id) - idx.get(a.id),
+    az:     (a, b) => a.text.localeCompare(b.text),
+    hard:   (a, b) => (b.level || 0) - (a.level || 0) || idx.get(a.id) - idx.get(b.id),
+    easy:   (a, b) => ((a.level || 9) - (b.level || 9)) || idx.get(a.id) - idx.get(b.id),
+    long:   (a, b) => (b.mins || 0) - (a.mins || 0) || idx.get(a.id) - idx.get(b.id)
   };
-  arr = arr.slice().sort(by[sort] || by.added);
-  if (sort !== 'heading') return [{ group: null, items: arr }];
-  const groups = new Map();
-  arr.forEach(j => { const h = _jlClean(j.heading); const k = h.toLowerCase(); if (!groups.has(k)) groups.set(k, { group: h, items: [] }); groups.get(k).items.push(j); });
-  return Array.from(groups.values()).sort((a, b) => (!a.group) - (!b.group) || a.group.localeCompare(b.group));
+  return arr.slice().sort(by[sort] || by.added);
 }
+function _jlGrouped(filter) {
+  const heads = new Map();
+  _jlFiltered(filter).forEach(j => {
+    const h = _jlClean(j.heading, 60), s = h ? _jlClean(j.sub, 60) : '';
+    if (!heads.has(h.toLowerCase())) heads.set(h.toLowerCase(), { heading: h, subs: new Map() });
+    const H = heads.get(h.toLowerCase());
+    if (!H.subs.has(s.toLowerCase())) H.subs.set(s.toLowerCase(), { sub: s, items: [] });
+    H.subs.get(s.toLowerCase()).items.push(j);
+  });
+  return Array.from(heads.values())
+    .sort((a, b) => (!a.heading) - (!b.heading) || a.heading.localeCompare(b.heading))
+    .map(H => ({ heading: H.heading, subs: Array.from(H.subs.values()).sort((a, b) => (!!a.sub) - (!!b.sub) || a.sub.localeCompare(b.sub)) }));
+}
+const _jlSumMins = items => items.reduce((s, j) => s + (j.mins > 0 ? j.mins : 0), 0);
 
 function openJobLog() {
   let modal = document.getElementById('joblog-modal');
@@ -16817,41 +16978,51 @@ function openJobLog() {
           <h2 class="modal-title">📒 Job Log</h2>
           <button class="modal-close" type="button" onclick="closeJobLog()" aria-label="Close">✕</button>
         </div>
-        <p class="jl-hint">A running list of the jobs I do: one line each. These are <strong>not tasks</strong> and never show up in a week. Give a line a heading, mark it 1 easy · 2 medium · 3 hard, and note roughly how long it takes.</p>
-        <div class="jl-add">
-          <input type="text" id="jl-new" placeholder="Type a job and press Enter…" maxlength="600" aria-label="New job">
-          <button class="btn btn-navy btn-sm" type="button" id="jl-add-btn">＋ Add</button>
-          <button class="btn btn-outline btn-sm" type="button" id="jl-paste-btn" title="Paste a whole Google Keep note: each line becomes one job">📝 Paste from Keep</button>
-        </div>
-        <div class="jl-paste" id="jl-paste">
-          <textarea id="jl-paste-text" class="keep-textarea" rows="6" placeholder="Paste a Keep note here. Each line becomes one job.&#10;Lines already in the log are left out, so you can paste the whole note again later."></textarea>
-          <div class="jl-paste-row">
-            <label for="jl-paste-head">Heading for these (optional):</label>
-            <input type="text" id="jl-paste-head" list="jl-headings" maxlength="60" placeholder="e.g. Accounting">
-            <button class="btn btn-navy btn-sm" type="button" id="jl-paste-go">Add these lines</button>
-            <button class="btn btn-outline btn-sm" type="button" id="jl-paste-cancel">Cancel</button>
+        <datalist id="jl-headings"></datalist><datalist id="jl-subs"></datalist>
+        <div class="jl-main">
+          <p class="jl-hint">A running list of the jobs I do: one line each. These are <strong>not tasks</strong> and never show up in a week. Note the time each takes and mark it 1 easy · 2 medium · 3 hard. <strong>Edit</strong> changes the wording, the heading and sub-heading, and has room for details.</p>
+          <div class="jl-add">
+            <input type="text" id="jl-new" placeholder="Type a job and press Enter…" maxlength="600" aria-label="New job">
+            <button class="btn btn-navy btn-sm" type="button" id="jl-add-btn">＋ Add</button>
+            <button class="btn btn-outline btn-sm" type="button" id="jl-paste-btn" title="Paste a whole Google Keep note: each line becomes one job">📝 Paste from Keep</button>
+          </div>
+          <div class="jl-paste" id="jl-paste">
+            <textarea id="jl-paste-text" class="keep-textarea" rows="6" placeholder="Paste a Keep note here. Each line becomes one job.&#10;Next you will see every line with a suggested heading, and any that look like duplicates."></textarea>
+            <div class="jl-paste-row">
+              <button class="btn btn-navy btn-sm" type="button" id="jl-paste-go">Review these lines →</button>
+              <button class="btn btn-outline btn-sm" type="button" id="jl-paste-cancel">Cancel</button>
+            </div>
+          </div>
+          <div class="jl-tools">
+            <input type="text" id="jl-filter" placeholder="Filter…" aria-label="Filter the list">
+            <select id="jl-sort" aria-label="Sort by">
+              <option value="heading">Grouped by heading</option>
+              <option value="added">Sort: as added</option>
+              <option value="newest">Sort: newest first</option>
+              <option value="az">Sort: A–Z</option>
+              <option value="hard">Sort: hardest first</option>
+              <option value="easy">Sort: easiest first</option>
+              <option value="long">Sort: longest first</option>
+            </select>
+            <button class="btn btn-outline btn-sm" type="button" id="jl-fold" title="Close or open every heading">⇕ Collapse all</button>
+            <span class="jl-count" id="jl-count"></span>
+          </div>
+          <div class="jl-list" id="jl-list"></div>
+          <div class="jl-foot">
+            <span class="jl-key">Time: 45, 1.5h or 1:30.</span>
+            <button class="btn btn-outline btn-sm" type="button" onclick="jlExport('copy')">📋 Copy</button>
+            <button class="btn btn-outline btn-sm" type="button" onclick="jlExport('txt')">⬇ Text file</button>
+            <button class="btn btn-navy btn-sm" type="button" onclick="jlExport('doc')">⬇ Word document</button>
           </div>
         </div>
-        <div class="jl-tools">
-          <input type="text" id="jl-filter" placeholder="Filter…" aria-label="Filter the list">
-          <select id="jl-sort" aria-label="Sort by">
-            <option value="added">Sort: as added</option>
-            <option value="newest">Sort: newest first</option>
-            <option value="heading">Sort: by heading</option>
-            <option value="az">Sort: A–Z</option>
-            <option value="hard">Sort: hardest first</option>
-            <option value="easy">Sort: easiest first</option>
-            <option value="long">Sort: longest first</option>
-          </select>
-          <span class="jl-count" id="jl-count"></span>
-        </div>
-        <datalist id="jl-headings"></datalist>
-        <div class="jl-list" id="jl-list"></div>
-        <div class="jl-foot">
-          <span class="jl-key">Click any line to edit it. Time: 45, 1.5h or 1:30.</span>
-          <button class="btn btn-outline btn-sm" type="button" onclick="jlExport('copy')">📋 Copy</button>
-          <button class="btn btn-outline btn-sm" type="button" onclick="jlExport('txt')">⬇ Text file</button>
-          <button class="btn btn-navy btn-sm" type="button" onclick="jlExport('doc')">⬇ Word document</button>
+        <div class="jl-review">
+          <p class="jl-hint" id="jl-rv-hint"></p>
+          <div class="jl-rv-list" id="jl-rv-list"></div>
+          <div class="jl-foot">
+            <span class="jl-key" id="jl-rv-count"></span>
+            <button class="btn btn-outline btn-sm" type="button" id="jl-rv-back">← Back</button>
+            <button class="btn btn-navy btn-sm" type="button" id="jl-rv-go">Add ticked lines</button>
+          </div>
         </div>
       </div>`;
     document.body.appendChild(modal);
@@ -16859,7 +17030,7 @@ function openJobLog() {
     const addOne = () => {
       const inp = $('#jl-new'); const t = _jlClean(inp.value);
       if (!t) return;
-      const r = jlAddLines([t], '');
+      const r = jlAddSuggested([t]);
       if (!r.added) { showToast('That line is already in the log'); return; }
       inp.value = ''; _jlRender(); inp.focus();
     };
@@ -16868,66 +17039,77 @@ function openJobLog() {
     $('#jl-paste-btn').addEventListener('click', () => { $('#jl-paste').classList.toggle('open'); if ($('#jl-paste').classList.contains('open')) $('#jl-paste-text').focus(); });
     $('#jl-paste-cancel').addEventListener('click', () => $('#jl-paste').classList.remove('open'));
     $('#jl-paste-go').addEventListener('click', () => {
-      const lines = ($('#jl-paste-text').value || '').split(/\r?\n/).map(_jlStripBullet).filter(Boolean);
+      const lines = ($('#jl-paste-text').value || '').split(/\r?\n/).map(_jlStripBullet).map(l => _jlClean(l)).filter(Boolean);
       if (!lines.length) { showToast('⚠ Nothing to add — paste some lines first'); return; }
-      const r = jlAddLines(lines, $('#jl-paste-head').value);
-      $('#jl-paste-text').value = ''; $('#jl-paste-head').value = ''; $('#jl-paste').classList.remove('open');
-      _jlRender();
-      const msg = (r.added ? '✓ Added ' + r.added + ' line' + (r.added === 1 ? '' : 's') : 'Nothing new') +
-                  (r.skipped ? ' — ' + r.skipped + ' already in the log' : '');
-      if (r.added) showUndoToast(msg, r.undo); else showToast(msg);
+      _jlStartReview(lines);
+    });
+    $('#jl-rv-back').addEventListener('click', () => { _jlReview = null; modal.classList.remove('reviewing'); });
+    $('#jl-rv-go').addEventListener('click', _jlApplyReview);
+    $('#jl-rv-list').addEventListener('input', e => {
+      const row = e.target.closest('.jl-rv'); if (!row || !_jlReview) return;
+      const r = _jlReview[+row.dataset.i]; if (!r) return;
+      if (e.target.matches('input[type=checkbox]')) { r.checked = e.target.checked; row.classList.toggle('off', !r.checked); }
+      else if (e.target.matches('.jl-rv-text')) r.text = e.target.value;
+      else if (e.target.matches('.jl-rv-h')) r.heading = e.target.value;
+      else if (e.target.matches('.jl-rv-s')) r.sub = e.target.value;
+      _jlReviewCount();
     });
     let ft = null;
     $('#jl-filter').addEventListener('input', e => { clearTimeout(ft); ft = setTimeout(() => { _jlFilter = e.target.value; _jlRender(); }, 150); });
     $('#jl-sort').addEventListener('change', e => { _jlSort = e.target.value; _jlRender(); });
+    $('#jl-fold').addEventListener('click', () => {
+      const keys = _jlGrouped(_jlFilter).map(H => 'h:' + H.heading.toLowerCase());
+      if (keys.every(k => _jlShut.has(k))) _jlShut.clear(); else keys.forEach(k => _jlShut.add(k));
+      _jlRender();
+    });
     const list = $('#jl-list');
-    const rowOf = el => { const r = el.closest('.jl-row'); return r ? r.dataset.id : null; };
     const patch = (id, fn) => { const arr = loadJobLog(); const j = arr.find(x => x.id === id); if (!j) return null; fn(j); j.mod = Date.now(); saveJobLog(arr); return j; };
     list.addEventListener('click', e => {
-      const lb = e.target.closest('.jl-lvl button');
-      if (lb) {
-        const id = rowOf(lb), l = +lb.dataset.l;
-        const j = patch(id, x => { x.level = x.level === l ? 0 : l; });
+      const g = e.target.closest('.jl-group, .jl-subgroup');
+      if (g) { const k = g.dataset.k; if (_jlShut.has(k)) _jlShut.delete(k); else _jlShut.add(k); _jlRender(); return; }
+      const row = e.target.closest('.jl-row'), ed = e.target.closest('.jl-editor');
+      const lb = e.target.closest('.jl-row .jl-lvl button');
+      if (lb && row) {
+        const l = +lb.dataset.l;
+        const j = patch(row.dataset.id, x => { x.level = x.level === l ? 0 : l; });
         if (j) lb.parentElement.querySelectorAll('button').forEach(b => b.classList.toggle('on', +b.dataset.l === j.level));
-        _jlCount(); return;
+        if (ed) return;
+        if (_jlEditing === row.dataset.id) _jlRender();
+        return;
       }
-      const del = e.target.closest('.jl-del');
-      if (del) {
-        const id = rowOf(del); const arr = loadJobLog(); const i = arr.findIndex(x => x.id === id);
+      if (e.target.closest('.jl-edit') && row) { _jlEditing = _jlEditing === row.dataset.id ? null : row.dataset.id; _jlRender(); if (_jlEditing) { const f = list.querySelector('.jl-editor .jl-e-text'); if (f) f.focus(); } return; }
+      if (!ed) return;
+      const id = ed.dataset.id;
+      const el = e.target.closest('.jl-e-lvl button');
+      if (el) { const on = el.classList.contains('on'); ed.querySelectorAll('.jl-e-lvl button').forEach(b => b.classList.remove('on')); if (!on) el.classList.add('on'); return; }
+      if (e.target.closest('.jl-cancel')) { _jlEditing = null; _jlRender(); return; }
+      if (e.target.closest('.jl-save')) { _jlSaveEditor(ed); return; }
+      if (e.target.closest('.jl-remove')) {
+        const arr = loadJobLog(); const i = arr.findIndex(x => x.id === id);
         if (i < 0) return;
         const gone = arr.splice(i, 1)[0];
-        saveJobLog(arr); _jlRender();
+        saveJobLog(arr); _jlEditing = null; _jlRender();
         showUndoToast('Removed “' + gone.text.slice(0, 40) + (gone.text.length > 40 ? '…' : '') + '”', () => {
           const cur = loadJobLog(); if (!cur.some(x => x.id === gone.id)) { cur.splice(Math.min(i, cur.length), 0, gone); saveJobLog(cur); } _jlRender();
         });
       }
     });
     list.addEventListener('keydown', e => {
-      if (e.key === 'Enter' && e.target.matches('.jl-text, .jl-head, .jl-mins')) { e.preventDefault(); e.target.blur(); }
-      if (e.key === 'Escape' && e.target.matches('.jl-text')) { e.stopPropagation(); e.target.textContent = e.target.dataset.was || ''; e.target.blur(); }
+      if (e.key === 'Enter' && e.target.matches('.jl-mins')) { e.preventDefault(); e.target.blur(); }
+      if (e.key === 'Enter' && e.target.matches('.jl-editor input')) { e.preventDefault(); _jlSaveEditor(e.target.closest('.jl-editor')); }
+      if (e.key === 'Escape' && e.target.closest('.jl-editor')) { e.stopPropagation(); _jlEditing = null; _jlRender(); }
     });
-    list.addEventListener('focusin', e => { if (e.target.matches('.jl-text')) e.target.dataset.was = e.target.textContent; });
     list.addEventListener('focusout', e => {
-      const t = e.target, id = t.closest ? rowOf(t) : null;
-      if (!id) return;
-      if (t.matches('.jl-text')) {
-        const v = _jlClean(t.textContent);
-        if (!v) { t.textContent = t.dataset.was || ''; return; }       // a line is removed with ✕, not by emptying it
-        if (v !== t.dataset.was) patch(id, x => { x.text = v; });
-        t.textContent = v;
-      } else if (t.matches('.jl-head')) {
-        const v = _jlClean(t.value).slice(0, 60);
-        const j = loadJobLog().find(x => x.id === id);
-        if (j && v !== (j.heading || '')) { patch(id, x => { x.heading = v; }); if (_jlSort === 'heading') _jlRender(); else _jlHeadList(); }
-      } else if (t.matches('.jl-mins')) {
-        const raw = t.value.trim(); const n = jlParseMins(raw);
-        if (raw && n === null) { showToast('⚠ Time not understood — try 45, 1.5h or 1:30'); const j = loadJobLog().find(x => x.id === id); t.value = j ? jlFmtMins(j.mins) : ''; return; }
-        const j = loadJobLog().find(x => x.id === id);
-        if (j && (j.mins || null) !== (n || null)) patch(id, x => { x.mins = n || null; });
-        t.value = jlFmtMins(n); _jlCount();
-      }
+      const t = e.target;
+      if (!t.matches || !t.matches('.jl-row .jl-mins')) return;
+      const id = t.closest('.jl-row').dataset.id;
+      const raw = t.value.trim(), n = jlParseMins(raw), j = loadJobLog().find(x => x.id === id);
+      if (!j) return;
+      if (raw && n === null) { showToast('⚠ Time not understood — try 45, 1.5h or 1:30'); t.value = jlFmtMins(j.mins); return; }
+      if ((j.mins || null) !== (n || null)) patch(id, x => { x.mins = n || null; });
+      t.value = jlFmtMins(n); _jlCount();
     });
-    modal.addEventListener('mousedown', e => { if (e.target === modal) closeJobLog(); });
+    modal.addEventListener('mousedown', e => { if (e.target === modal && !_jlEditing && !_jlReview) closeJobLog(); });
   }
   modal.querySelector('#jl-sort').value = _jlSort;
   modal.querySelector('#jl-filter').value = _jlFilter;
@@ -16937,67 +17119,172 @@ function openJobLog() {
 function closeJobLog() {
   const m = document.getElementById('joblog-modal');
   if (!m) return;
-  if (document.activeElement && m.contains(document.activeElement)) document.activeElement.blur();   // save an edit in progress
+  if (document.activeElement && m.contains(document.activeElement)) document.activeElement.blur();   // save a time being typed
   m.classList.remove('open');
 }
-function _jlHeadList() {
-  const dl = document.getElementById('jl-headings');
-  if (dl) dl.innerHTML = _jlHeadings().map(h => `<option value="${escapeHtml(h)}"></option>`).join('');
+function _jlSaveEditor(ed) {
+  const id = ed.dataset.id, v = s => ed.querySelector(s).value;
+  const text = _jlClean(v('.jl-e-text'));
+  if (!text) { showToast('⚠ The job needs some wording'); return; }
+  const rawT = v('.jl-e-mins').trim(), mins = jlParseMins(rawT);
+  if (rawT && mins === null) { showToast('⚠ Time not understood — try 45, 1.5h or 1:30'); return; }
+  const heading = _jlClean(v('.jl-e-head'), 60), sub = _jlClean(v('.jl-e-sub'), 60);
+  if (sub && !heading) { showToast('⚠ A sub-heading needs a heading above it'); return; }
+  const on = ed.querySelector('.jl-e-lvl button.on');
+  const arr = loadJobLog(); const j = arr.find(x => x.id === id);
+  if (!j) { _jlEditing = null; _jlRender(); return; }
+  if (arr.some(x => x.id !== id && _jlNorm(x.text) === _jlNorm(text))) { showToast('⚠ Another line already says exactly that'); return; }
+  Object.assign(j, { text, heading, sub, mins: mins || null, level: on ? +on.dataset.l : 0, details: _jlCleanMulti(v('.jl-e-det')), mod: Date.now() });
+  saveJobLog(arr); _jlEditing = null; _jlRender();
+}
+function _jlLists() {
+  const fill = (id, vals) => { const dl = document.getElementById(id); if (dl) dl.innerHTML = vals.map(h => `<option value="${escapeHtml(h)}"></option>`).join(''); };
+  fill('jl-headings', _jlHeadings()); fill('jl-subs', _jlSubs());
 }
 function _jlCount() {
   const el = document.getElementById('jl-count');
   if (!el) return;
-  const all = loadJobLog();
-  const mins = all.reduce((s, j) => s + (j.mins > 0 ? j.mins : 0), 0);
-  const shown = _jlArranged(_jlSort, _jlFilter).reduce((s, g) => s + g.items.length, 0);
+  const all = loadJobLog(), mins = _jlSumMins(all), shown = _jlFiltered(_jlFilter).length;
   el.textContent = (shown !== all.length ? shown + ' of ' : '') + all.length + ' job' + (all.length === 1 ? '' : 's') + (mins ? ' · ' + jlFmtMins(mins) + ' noted' : '');
 }
 function _jlRender() {
   const list = document.getElementById('jl-list');
   if (!list) return;
-  const groups = _jlArranged(_jlSort, _jlFilter);
+  const grouped = _jlSort === 'heading';
+  const lvl = (cur, cls) => `<span class="jl-lvl ${cls || ''}" role="group" aria-label="Difficulty">${[1, 2, 3].map(l => `<button type="button" data-l="${l}" class="${cur === l ? 'on' : ''}" title="${l} — ${JL_LEVELS[l]}">${l}</button>`).join('')}</span>`;
   const row = j => `
-    <div class="jl-row" data-id="${escapeHtml(j.id)}">
-      <div class="jl-text" contenteditable="plaintext-only" spellcheck="true" role="textbox" aria-label="Job">${escapeHtml(j.text)}</div>
-      <input class="jl-head" type="text" list="jl-headings" maxlength="60" placeholder="heading" value="${escapeHtml(j.heading || '')}" aria-label="Heading">
-      <span class="jl-lvl" role="group" aria-label="How hard">${[1, 2, 3].map(l => `<button type="button" data-l="${l}" class="${j.level === l ? 'on' : ''}" title="${l} — ${JL_LEVELS[l]}">${l}</button>`).join('')}</span>
+    <div class="jl-row${_jlEditing === j.id ? ' editing' : ''}" data-id="${escapeHtml(j.id)}">
       <input class="jl-mins" type="text" placeholder="time" value="${escapeHtml(jlFmtMins(j.mins))}" aria-label="How long it takes">
-      <button class="jl-del" type="button" title="Remove this line" aria-label="Remove">✕</button>
-    </div>`;
-  const total = groups.reduce((s, g) => s + g.items.length, 0);
-  if (!total) {
+      ${lvl(j.level)}
+      <div class="jl-job"><div class="jl-text">${escapeHtml(j.text)}</div>${j.details ? `<div class="jl-det">${escapeHtml(j.details)}</div>` : ''}</div>
+      ${grouped ? '' : `<div class="jl-where">${escapeHtml(j.heading || '')}${j.heading && j.sub ? ' › ' + escapeHtml(j.sub) : ''}</div>`}
+      <button class="jl-edit" type="button" title="Change the wording, heading or sub-heading, or add details">✎ Edit</button>
+    </div>` + (_jlEditing === j.id ? `
+    <div class="jl-editor" data-id="${escapeHtml(j.id)}">
+      <div class="wide"><label>Job</label><textarea class="jl-f jl-e-text" rows="2" maxlength="600">${escapeHtml(j.text)}</textarea></div>
+      <div><label>Heading</label><input class="jl-f jl-e-head" type="text" list="jl-headings" maxlength="60" placeholder="e.g. Accounting" value="${escapeHtml(j.heading || '')}"></div>
+      <div><label>Sub-heading</label><input class="jl-f jl-e-sub" type="text" list="jl-subs" maxlength="60" placeholder="e.g. Payroll" value="${escapeHtml(j.sub || '')}"></div>
+      <div><label>Time it takes</label><input class="jl-f jl-e-mins" type="text" placeholder="45, 1.5h or 1:30" value="${escapeHtml(jlFmtMins(j.mins))}"></div>
+      <div><label>Difficulty</label>${lvl(j.level, 'jl-e-lvl')}</div>
+      <div class="wide"><label>Details</label><textarea class="jl-f jl-e-det" rows="4" maxlength="4000" placeholder="Steps, logins to use, who to call, what to watch for… anything that would help someone else do this.">${escapeHtml(j.details || '')}</textarea></div>
+      <div class="wide jl-editor-btns">
+        <button class="btn btn-navy btn-sm jl-save" type="button">Save</button>
+        <button class="btn btn-outline btn-sm jl-cancel" type="button">Cancel</button>
+        <button class="btn btn-outline btn-sm jl-remove" type="button">Remove this job</button>
+      </div>
+    </div>` : '');
+  const cols = `<div class="jl-cols"><span>Time</span><span>Difficulty</span><span>Job</span>${grouped ? '' : '<span>Heading</span>'}<span></span></div>`;
+  const n = _jlFiltered(_jlFilter).length;
+  list.classList.toggle('flat', !grouped);
+  const fold = document.getElementById('jl-fold');
+  if (!n) {
     list.innerHTML = `<div class="jl-empty">${loadJobLog().length ? 'Nothing matches that filter.' : 'Nothing here yet.<br>Type a job above, or use <strong>Paste from Keep</strong> to bring in a whole note — one line per job.'}</div>`;
+  } else if (!grouped) {
+    list.innerHTML = cols + _jlFlat(_jlSort, _jlFilter).map(row).join('');
   } else {
-    list.innerHTML = groups.map(g => {
-      const m = g.items.reduce((s, j) => s + (j.mins > 0 ? j.mins : 0), 0);
-      return (g.group === null ? '' : `<div class="jl-group">${escapeHtml(g.group || 'No heading')}<span>${g.items.length}${m ? ' · ' + jlFmtMins(m) : ''}</span></div>`) + g.items.map(row).join('');
+    const open = !!_jlFilter;               // a filter shows every match, folded or not
+    const stat = items => { const m = _jlSumMins(items); return items.length + (m ? ' · ' + jlFmtMins(m) : ''); };
+    list.innerHTML = cols + _jlGrouped(_jlFilter).map(H => {
+      const hk = 'h:' + H.heading.toLowerCase(), hShut = !open && _jlShut.has(hk);
+      const all = H.subs.reduce((a, s) => a.concat(s.items), []);
+      return `<button type="button" class="jl-group${hShut ? ' shut' : ''}" data-k="${escapeHtml(hk)}"><span class="jl-caret">▾</span>${escapeHtml(H.heading || 'No heading')}<span class="jl-n">${stat(all)}</span></button>` +
+        (hShut ? '' : H.subs.map(S => {
+          if (!S.sub) return S.items.map(row).join('');
+          const sk = 's:' + H.heading.toLowerCase() + '|' + S.sub.toLowerCase(), sShut = !open && _jlShut.has(sk);
+          return `<button type="button" class="jl-subgroup${sShut ? ' shut' : ''}" data-k="${escapeHtml(sk)}"><span class="jl-caret">▾</span>${escapeHtml(S.sub)}<span class="jl-n">${stat(S.items)}</span></button>` + (sShut ? '' : S.items.map(row).join(''));
+        }).join(''));
     }).join('');
   }
-  _jlHeadList(); _jlCount();
+  if (fold) {
+    fold.style.display = grouped && n ? '' : 'none';
+    const keys = _jlGrouped(_jlFilter).map(H => 'h:' + H.heading.toLowerCase());
+    fold.textContent = keys.length && keys.every(k => _jlShut.has(k)) ? '⇕ Expand all' : '⇕ Collapse all';
+  }
+  _jlLists(); _jlCount();
 }
 
-/* Export the whole log, grouped by heading: copy, a text file, or a Word document. */
-function _jlExportGroups() { return _jlArranged('heading', ''); }
+/* ── Reviewing a pasted note before anything is added ── */
+function _jlStartReview(lines) {
+  const pool = loadJobLog().map(j => ({ text: j.text, heading: j.heading || '', sub: j.sub || '', _in: true }));
+  const w = _jlWeigher(pool.map(p => p.text).concat(lines));
+  _jlReview = lines.map(t => {
+    const s = jlSuggest(t, pool, w);
+    const r = { text: t, heading: s.heading, sub: s.sub, why: s.why, flag: s.flag, match: s.match ? s.match.text : '', inPaste: !!(s.match && !s.match._in), checked: s.flag === 'new' || s.flag === 'similar' };
+    pool.push({ text: t, heading: s.heading, sub: s.sub });       // so a later line in the same note can match this one
+    return r;
+  });
+  const modal = document.getElementById('joblog-modal');
+  const list = document.getElementById('jl-rv-list');
+  const cut = t => escapeHtml(t.length > 90 ? t.slice(0, 90) + '…' : t);
+  const where = r => r.inPaste ? 'another line in this note' : 'a line already in the log';
+  list.innerHTML = `<div class="jl-rv-head"><span></span><span>Job</span><span>Heading</span><span>Sub-heading</span></div>` + _jlReview.map((r, i) => `
+    <div class="jl-rv ${r.flag}${r.checked ? '' : ' off'}" data-i="${i}">
+      <input type="checkbox" ${r.checked ? 'checked' : ''} aria-label="Add this line">
+      <input class="jl-f jl-rv-text" type="text" maxlength="600" value="${escapeHtml(r.text)}" aria-label="Job">
+      <input class="jl-f jl-rv-h" type="text" list="jl-headings" maxlength="60" placeholder="heading" value="${escapeHtml(r.heading)}" aria-label="Heading">
+      <input class="jl-f jl-rv-s" type="text" list="jl-subs" maxlength="60" placeholder="sub-heading" value="${escapeHtml(r.sub)}" aria-label="Sub-heading">
+      ${r.flag === 'exact' ? `<div class="jl-rv-flag"><b>Already in the log</b> — word for word${r.inPaste ? ' (it is in this note twice)' : ''}. Left out.</div>`
+        : r.flag === 'dupe' ? `<div class="jl-rv-flag"><b>Looks like a duplicate</b> of ${where(r)}: “${cut(r.match)}”. Tick it to add it anyway.</div>`
+        : r.flag === 'similar' ? `<div class="jl-rv-flag"><b>Similar</b> to ${where(r)}: “${cut(r.match)}”. Untick it if it is the same job.</div>`
+        : ''}
+    </div>`).join('');
+  const c = f => _jlReview.filter(r => r.flag === f).length;
+  document.getElementById('jl-rv-hint').innerHTML = `<strong>${_jlReview.length} line${_jlReview.length === 1 ? '' : 's'}</strong> in that note. Each has a suggested heading and sub-heading — change any of them, or leave them blank. ` +
+    (c('dupe') + c('exact') ? `<strong>${c('dupe') + c('exact')}</strong> look${c('dupe') + c('exact') === 1 ? 's' : ''} like something already listed and ${c('dupe') + c('exact') === 1 ? 'is' : 'are'} unticked. ` : '') +
+    (c('similar') ? `<strong>${c('similar')}</strong> ${c('similar') === 1 ? 'is' : 'are'} similar to another line — worth a look. ` : '') + 'Nothing is added until you press the button.';
+  _jlLists(); _jlReviewCount();
+  modal.classList.add('reviewing');
+  list.scrollTop = 0;
+}
+function _jlReviewCount() {
+  const n = (_jlReview || []).filter(r => r.checked && _jlClean(r.text)).length;
+  const el = document.getElementById('jl-rv-count'), go = document.getElementById('jl-rv-go');
+  if (el) el.textContent = n + ' of ' + (_jlReview || []).length + ' ticked';
+  if (go) { go.textContent = n ? 'Add ' + n + ' line' + (n === 1 ? '' : 's') : 'Nothing ticked'; go.disabled = !n; }
+}
+function _jlApplyReview() {
+  if (!_jlReview) return;
+  const picked = _jlReview.filter(r => r.checked && _jlClean(r.text));
+  if (picked.some(r => _jlClean(r.sub) && !_jlClean(r.heading))) { showToast('⚠ A sub-heading needs a heading above it'); return; }
+  const r = jlAddLines(picked.map(p => ({ text: p.text, heading: p.heading, sub: p.sub })));
+  const left = _jlReview.length - r.added;
+  _jlReview = null;
+  const modal = document.getElementById('joblog-modal');
+  modal.classList.remove('reviewing');
+  modal.querySelector('#jl-paste-text').value = ''; modal.querySelector('#jl-paste').classList.remove('open');
+  _jlRender();
+  const msg = (r.added ? '✓ Added ' + r.added + ' line' + (r.added === 1 ? '' : 's') : 'Nothing new added') + (left ? ' — ' + left + ' left out' : '');
+  if (r.added) showUndoToast(msg, r.undo); else showToast(msg);
+}
+
+/* ── Export the whole log, by heading and sub-heading ── */
 function _jlText() {
   const out = ['JOB LOG — ' + new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }), ''];
-  _jlExportGroups().forEach(g => {
-    out.push((g.group || 'No heading').toUpperCase());
-    g.items.forEach(j => out.push('  - ' + j.text + (j.level ? '  [' + j.level + ' ' + JL_LEVELS[j.level].toLowerCase() + ']' : '') + (j.mins ? '  (' + jlFmtMins(j.mins) + ')' : '')));
+  const line = (j, pad) => {
+    out.push(pad + '- ' + j.text + (j.mins ? '  (' + jlFmtMins(j.mins) + ')' : '') + (j.level ? '  [' + j.level + ' ' + JL_LEVELS[j.level].toLowerCase() + ']' : ''));
+    if (j.details) j.details.split('\n').forEach(d => out.push(pad + '    ' + d));
+  };
+  _jlGrouped('').forEach(H => {
+    out.push((H.heading || 'No heading').toUpperCase());
+    H.subs.forEach(S => { if (S.sub) out.push('  ' + S.sub); S.items.forEach(j => line(j, S.sub ? '    ' : '  ')); });
     out.push('');
   });
   return out.join('\r\n');
 }
 function _jlDoc() {
   const e = escapeHtml, date = new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
-  const all = loadJobLog(), mins = all.reduce((s, j) => s + (j.mins > 0 ? j.mins : 0), 0);
+  const all = loadJobLog(), mins = _jlSumMins(all);
   const lvl = l => l ? `<span style="color:${({ 1: '#4f8265', 2: '#a8872e', 3: '#b5483a' })[l]};font-weight:bold">${l} ${JL_LEVELS[l]}</span>` : '';
-  const body = _jlExportGroups().map(g => {
-    const m = g.items.reduce((s, j) => s + (j.mins > 0 ? j.mins : 0), 0);
-    return `<h2 style="font-family:Georgia,serif;font-size:14pt;color:#ffffff;background:#29549B;padding:4pt 8pt;margin:14pt 0 0 0">${e(g.group || 'No heading')} <span style="font-size:10pt;font-weight:normal">(${g.items.length}${m ? ', ' + jlFmtMins(m) : ''})</span></h2>
-<table style="border-collapse:collapse;width:100%;font-family:Calibri,Arial,sans-serif;font-size:11pt">
-<tr style="background:#f8f6f1"><th style="text-align:left;border-bottom:1.5pt solid #c9a84c;padding:3pt 6pt">Job</th><th style="text-align:left;border-bottom:1.5pt solid #c9a84c;padding:3pt 6pt;width:70pt">Effort</th><th style="text-align:left;border-bottom:1.5pt solid #c9a84c;padding:3pt 6pt;width:60pt">Time</th></tr>
-${g.items.map(j => `<tr><td style="border-bottom:.5pt solid #c8d3e0;padding:3pt 6pt">${e(j.text)}</td><td style="border-bottom:.5pt solid #c8d3e0;padding:3pt 6pt">${lvl(j.level)}</td><td style="border-bottom:.5pt solid #c8d3e0;padding:3pt 6pt">${e(jlFmtMins(j.mins))}</td></tr>`).join('\n')}
+  const td = 'border-bottom:.5pt solid #c8d3e0;padding:3pt 6pt;vertical-align:top', th = 'text-align:left;border-bottom:1.5pt solid #c9a84c;padding:3pt 6pt';
+  const stat = items => { const m = _jlSumMins(items); return items.length + (m ? ', ' + jlFmtMins(m) : ''); };
+  const table = items => `<table style="border-collapse:collapse;width:100%;font-family:Calibri,Arial,sans-serif;font-size:11pt">
+<tr style="background:#f8f6f1"><th style="${th};width:55pt">Time</th><th style="${th};width:65pt">Difficulty</th><th style="${th}">Job</th></tr>
+${items.map(j => `<tr><td style="${td}">${e(jlFmtMins(j.mins))}</td><td style="${td}">${lvl(j.level)}</td><td style="${td}">${e(j.text)}${j.details ? `<div style="font-size:9.5pt;color:#5a6a7e;margin-top:2pt">${e(j.details).replace(/\n/g, '<br>')}</div>` : ''}</td></tr>`).join('\n')}
 </table>`;
+  const body = _jlGrouped('').map(H => {
+    const allH = H.subs.reduce((a, s) => a.concat(s.items), []);
+    return `<h2 style="font-family:Georgia,serif;font-size:14pt;color:#ffffff;background:#29549B;padding:4pt 8pt;margin:14pt 0 0 0">${e(H.heading || 'No heading')} <span style="font-size:10pt;font-weight:normal">(${stat(allH)})</span></h2>` +
+      H.subs.map(S => (S.sub ? `<h3 style="font-family:Georgia,serif;font-size:12pt;color:#29549B;background:#fff7df;border-bottom:1pt solid #c9a84c;padding:3pt 8pt;margin:8pt 0 0 0">${e(S.sub)} <span style="font-size:9.5pt;font-weight:normal">(${stat(S.items)})</span></h3>` : '') + table(S.items)).join('\n');
   }).join('\n');
   return `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8"><title>Job Log</title>
 <!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View><w:Zoom>100</w:Zoom></w:WordDocument></xml><![endif]-->
@@ -17241,7 +17528,7 @@ function keepBridgeImport() {
   let promisesTouched = false;
   byDest.forEach((lines, dest) => {
     if (dest === 'joblog') {
-      const jr = jlAddLines(lines, '');
+      const jr = jlAddSuggested(lines);
       if (jr.added) { parts.push(jr.added + ' to the Job Log'); undos.push(jr.undo); }
       return;
     }
@@ -29217,7 +29504,7 @@ function renderInstallRow() {
    One constant, stamped into every page header at boot rather than written
    into four blocks of markup — so bumping it is a one-line change and the
    pages can never disagree about which version they are. */
-const APP_VERSION = 'v1.41';
+const APP_VERSION = 'v1.42';
 function stampAppVersion() {
   document.querySelectorAll('.header-actions').forEach(host => {
     let el = host.querySelector('.app-version');
