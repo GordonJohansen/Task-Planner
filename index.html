@@ -16746,7 +16746,7 @@ function saveAssignModal() {
 //  and Google Keep's voice notes / the car's memo.
 // ═══════════════════════════════════════════════════════════════════
 // ═══════════════════════════════════════════════════════════════════
-//  v1.41 — JOB LOG   (v1.42: column headings, headings and sub-headings,
+//  v1.41 — JOB LOG   (v1.43: a standard set of headings, and Re-file; v1.42: column headings, headings and sub-headings,
 //  an Edit panel with room for details, and a review step on paste that
 //  suggests where each line belongs and flags likely duplicates)
 //  A plain list of the jobs I do, for scanning rather than doing. Lines are
@@ -16843,24 +16843,73 @@ function _jlSim(a, b, w) {
   b.forEach(k => { sb += w(k); });
   return { score: shared / Math.min(sa, sb), both: shared / Math.max(sa, sb) };
 }
-/* Words that point at an area, and the heading to suggest when the log has
-   none of its own for it. Earlier rows are the more specific ones. */
+/* v1.43 — the standard headings and sub-headings, and the words that point
+   at each. The split that matters most: BOOKKEEPING is recording what has
+   happened (rule-following, could be handed to a bookkeeper); MONEY DECISIONS
+   is deciding what to do with money (needs someone with authority).
+   Earlier rows win a tie. `need` = must also match; `not` = must not;
+   `boost` lifts a rule that depends on a deciding word over a plain keyword. */
 const JL_AREAS = [
-  { line: /\b(payroll|t4s?|payworks|wheniwork|pay ?periods?|roes?|paycheques?|paychecks?)\b/, name: /payroll|wages/, h: 'Accounting', s: 'Payroll' },
-  { line: /\b(gst|hst|pst|cra|tax(es)?|t2|audits?|remittances?)\b/, name: /\btax|\bcra\b|gst/, h: 'Accounting', s: 'Tax & CRA' },
-  { line: /\b(quickbooks|qbo|bookkeep\w*|journal entr\w*|ledger|accounts payable|payables?|invoices?)\b/, name: /bookkeep|quickbooks|ledger|payable/, h: 'Accounting', s: 'Bookkeeping' },
-  { line: /\b(banks?|banking|deposits?|ccs?|credit[ -]?cards?|reconcil\w*|eft|transfers?|withdrawals?)\b/, name: /bank|credit|card/, h: 'Accounting', s: 'Banking & credit cards' },
-  { line: /\b(hsa|benefits?|health spending|insurance)\b/, name: /benefit|hsa|insur/, h: 'Staff', s: 'Benefits' },
-  { line: /\b(e-?mails?|spam|software|windows|computers?|pcs?|printers?|network|firewall|postbox|firebox|wi-?fi|backups?|passwords?)\b/, name: /\bit\b|e-?mail|computer|tech/, h: 'IT & Email', s: '' },
-  { line: /\b(google|reviews?|website|web ?site|facebook|instagram|social media|holiday hours|calendar)\b/, name: /online|web|social|marketing|google/, h: 'Online presence', s: '' },
-  { line: /\b(fedex|ups|canada post|purolator|shipping|shipments?|couriers?|brokerage)\b/, name: /ship|courier/, h: 'Shipping', s: '' },
-  { line: /\b(orders?|ordering|suppliers?|distributors?|dyk|restock\w*|purchas\w*|special orders?)\b/, name: /order|purchas|buying/, h: 'Purchasing', s: '' },
-  { line: /\b(construction|renovat\w*|building|fixtures?|shelv\w*|landlord|lease|hvac|plumbing|signage)\b/, name: /build|facilit|premises/, h: 'Building', s: '' },
-  { line: /\b(repairs?|boiler|equipment|maintenance|broken|servic(e|ing))\b/, name: /maint|repair/, h: 'Building', s: 'Maintenance' },
-  { line: /\b(hiring|interviews?|schedul\w*|staff|employees?|training|performance reviews?)\b/, name: /staff|\bhr\b|people|team/, h: 'Staff', s: '' },
-  { line: /\b(customers?|products?|questions)\b/, name: /customer|sales|product/, h: 'Customer service', s: '' },
-  { line: /\b(accounting|accounts?|financ\w*|money|funds)\b/, name: /account|financ/, h: 'Accounting', s: '' }
+  { h: 'Money decisions', s: 'Banking relationships', boost: 1500, line: /\b(banks?|credit[ -]?cards?|ccs?|accounts?|line of credit|loans?|merchant)\b/, need: /\b(setting up|set up|open(ing)?|clos(e|ing)|negotiat\w*|appl(y|ying)|choos\w*|switch\w*)\b/, not: /\b(e-?mails?|spam|payroll)\b/ },
+  { h: 'Money decisions', s: 'Cash flow & funding', boost: 1500, line: /\b(payments?|pay(ing)?|funds|cash ?flow|transfers?|ccs?|credit[ -]?cards?)\b/, need: /\b(decid\w*|determin\w*|as needed|when to|early|timing|priorit\w*)\b/, not: /\b(payroll|t4s?|orders?|invoices?)\b/ },
+  { h: 'Money decisions', s: 'Tax & CRA', line: /\b(cra|tax(es)?|t2|audits?|gst|hst|pst|remittances?)\b/ },
+  { h: 'Bookkeeping', s: 'Payroll', line: /\b(payroll|t4s?|payworks|wheniwork|pay ?periods?|roes?|paycheques?|paychecks?)\b/ },
+  { h: 'Bookkeeping', s: 'Reconciliations', line: /\breconcil\w*/ },
+  { h: 'Bookkeeping', s: 'Month-end & year-end', line: /\b(month[- ]end|year[- ]end|closing the books|financial statements|accruals?|adjusting entr\w*)\b/ },
+  { h: 'Bookkeeping', s: 'Payables & invoices', line: /\b(invoices?|bills?|payables?|accounts payable|statements?|dext|receipts?)\b/ },
+  { h: 'Bookkeeping', s: 'Banking & credit cards', line: /\b(banks?|banking|deposits?|ccs?|credit[ -]?cards?|eft|transfers?|withdrawals?|downloads?)\b/ },
+  { h: 'Bookkeeping', s: 'Daily entries', boost: 1200, line: /\b(quickbooks|qbo|bookkeep\w*|journal entr\w*|ledger|data entry)\b/ },
+  { h: 'Money decisions', s: 'Insurance & benefits', line: /\b(hsa|benefits?|health spending|insurance|wcb)\b/ },
+  { h: 'Money decisions', s: 'Budgets & pricing', line: /\b(budgets?|pricing|prices?|margins?|forecasts?|discounts?)\b/ },
+  { h: 'Money decisions', s: 'Cash flow & funding', line: /\b(cash ?flow|funding|loans?|line of credit|financing|investments?)\b/ },
+  { h: 'IT & software', s: 'Backups & security', line: /\b(backups?|passwords?|firewall|firebox|antivirus|security updates?|2fa)\b/ },
+  { h: 'IT & software', s: 'Point of sale', line: /\b(pos|point of sale|tills?|barcodes?|scanners?|inventory system)\b/ },
+  { h: 'IT & software', s: 'Computers & network', line: /\b(computers?|pcs?|printers?|network|wi-?fi|routers?|servers?|laptops?|monitors?)\b/ },
+  { h: 'IT & software', s: 'Software & subscriptions', line: /\b(software|apps?|subscriptions?|windows|upgrades?|programs?)\b/ },
+  { h: 'Email & communications', s: 'Email accounts & spam', line: /\b(e-?mails?|spam|postbox|thunderbird|mailbox(es)?|redirect\w*)\b/ },
+  { h: 'Email & communications', s: 'Phones & internet', line: /\b(phones?|voicemail|internet|cell(ular)?|telus|shaw|rogers)\b/ },
+  { h: 'Meetings', s: 'Advisors', boost: 1500, line: /\b(accountants?|lawyers?|bankers?|advisors?|consultants?)\b/, need: /\b(meet\w*|calls?|appointments?|sit down)\b/ },
+  { h: 'Meetings', s: 'Staff meetings', boost: 500, line: /\b(staff meetings?|team meetings?|managers? meetings?|one[- ]on[- ]ones?)\b/ },
+  { h: 'Meetings', s: 'Suppliers & reps', boost: 1500, line: /\b(reps?|suppliers?|distributors?|vendors?)\b/, need: /\b(meet\w*|appointments?|visits?)\b/ },
+  { h: 'Meetings', s: '', line: /\b(meetings?|meet with|appointments?|conference calls?)\b/ },
+  { h: 'Building & maintenance', s: 'Landlord & lease', line: /\b(landlord|lease|rent|property tax(es)?|condo)\b/ },
+  { h: 'Building & maintenance', s: 'Construction & fixtures', line: /\b(construction|renovat\w*|fixtures?|shelv\w*|signage|display cases?|contractors?)\b/ },
+  { h: 'Building & maintenance', s: 'Safety & inspections', line: /\b(inspections?|fire alarms?|extinguishers?|alarms?|safety|security system)\b/ },
+  { h: 'Building & maintenance', s: 'Repairs & equipment', line: /\b(repairs?|boiler|hvac|plumbing|equipment|maintenance|broken|servic(e|ing)|furnace|lights?|cleaning)\b/ },
+  { h: 'Staff', s: 'Hiring & onboarding', line: /\b(hiring|interviews?|onboarding|job postings?|new hires?)\b/ },
+  { h: 'Staff', s: 'Scheduling', line: /\b(schedul\w*|shifts?|time ?off|vacations?)\b/ },
+  { h: 'Staff', s: 'Training & reviews', line: /\b(training|performance reviews?|staff reviews?|coaching)\b/ },
+  { h: 'Staff', s: '', line: /\b(staff|employees?)\b/ },
+  { h: 'Shipping & receiving', s: 'Couriers & brokerage', line: /\b(fedex|ups|canada post|purolator|couriers?|brokerage|customs|shipping|shipments?|shippers?)\b/ },
+  { h: 'Shipping & receiving', s: 'Receiving', line: /\b(receiving|deliver(y|ies)|packing slips?)\b/ },
+  { h: 'Purchasing', s: 'Special orders', line: /\b(special orders?|pre-?orders?)\b/ },
+  { h: 'Purchasing', s: 'Suppliers & distributors', line: /\b(suppliers?|distributors?|vendors?|credit applications?)\b/ },
+  { h: 'Purchasing', s: 'Ordering & restocks', line: /\b(orders?|ordering|dyk|restock\w*|purchas\w*|buying)\b/ },
+  { h: 'Marketing & online', s: 'Store hours & listings', line: /\b(holiday hours|store hours|calendar|listings?|google (business|maps))\b/ },
+  { h: 'Marketing & online', s: 'Google & reviews', line: /\b(reviews?|google)\b/ },
+  { h: 'Marketing & online', s: 'Website', line: /\b(website|web ?site|online store|shopify|seo)\b/ },
+  { h: 'Marketing & online', s: 'Social media', line: /\b(facebook|instagram|social media|discord|newsletters?)\b/ },
+  { h: 'Marketing & online', s: 'Advertising & events', line: /\b(advertis\w*|ads?|events?|tournaments?|conventions?|sponsor\w*)\b/ },
+  { h: 'Customers', s: 'Complaints & returns', line: /\b(complaints?|returns?|refunds?|warrant(y|ies))\b/ },
+  { h: 'Customers', s: 'Product questions', line: /\b(customers?|questions|products?)\b/ },
+  { h: 'Planning & admin', s: 'Licences & registrations', line: /\b(licen[cs]es?|registrations?|permits?|annual returns?|renewals?)\b/ },
+  { h: 'Planning & admin', s: 'Legal & corporate records', line: /\b(legal|lawyers?|contracts?|minute books?|corporate|shares?)\b/ },
+  { h: 'Planning & admin', s: 'Planning & goals', line: /\b(planning|goals|strategy|succession|quarterly plan)\b/ },
+  { h: 'Bookkeeping', s: '', line: /\b(accounting|accounts?)\b/ },
+  { h: 'Money decisions', s: '', line: /\b(financ\w*|money|funds)\b/ }
 ];
+/* Where the wording alone says a line belongs → { heading, sub } or null */
+function jlAreaFor(text) {
+  const t = String(text || '').toLowerCase();
+  let area = null, top = 0;
+  JL_AREAS.forEach((a, i) => {
+    if ((a.need && !a.need.test(t)) || (a.not && a.not.test(t))) return;
+    const n = Math.min(2, (t.match(new RegExp(a.line.source, 'g')) || []).length);
+    const sc = n ? n * 1000 + (a.boost || 0) + (JL_AREAS.length - i) * 10 : 0;
+    if (sc > top) { top = sc; area = a; }
+  });
+  return area ? { heading: area.h, sub: area.s } : null;
+}
 /* Where a new line probably belongs, and what it may duplicate.
    `pool` is the lines to compare with: [{ text, heading, sub }].
    → { heading, sub, why, flag: 'new' | 'similar' | 'dupe' | 'exact', match } */
@@ -16871,26 +16920,15 @@ function jlSuggest(text, pool, w) {
     if (_jlNorm(p.text) === key) { exact = exact || p; return; }
     const s = _jlSim(toks, p._t || (p._t = jlTokens(p.text)), w);
     if (!best || s.score > best.s.score || (s.score === best.s.score && s.both > best.s.both)) best = { p, s };
-    if (p.heading && s.score >= 0.5 && s.both >= 0.25 && (!bestHome || s.score > bestHome.s.score)) bestHome = { p, s };
+    if (p.heading && s.score >= 0.7 && s.both >= 0.4 && (!bestHome || s.score > bestHome.s.score)) bestHome = { p, s };
   });
   const out = { heading: '', sub: '', why: '', flag: 'new', match: null };
   if (exact) { out.flag = 'exact'; out.match = exact; out.heading = exact.heading || ''; out.sub = exact.sub || ''; return out; }
   if (best && best.s.score >= 0.8 && best.s.both >= 0.6) { out.flag = 'dupe'; out.match = best.p; }
   else if (best && best.s.score >= 0.5 && best.s.both >= 0.3) { out.flag = 'similar'; out.match = best.p; }
   if (bestHome) { out.heading = bestHome.p.heading; out.sub = bestHome.p.sub || ''; out.why = 'like a line already there'; return out; }
-  // by the words in it — preferring a heading the log already uses for that area
-  const t = String(text || '').toLowerCase();
-  let area = null, top = 0;
-  JL_AREAS.forEach((a, i) => {
-    const n = Math.min(2, (t.match(new RegExp(a.line.source, 'g')) || []).length);
-    const sc = n ? n * 1000 + (JL_AREAS.length - i) * 10 : 0;
-    if (sc > top) { top = sc; area = a; }
-  });
-  if (!area) return out;
-  const mine = pool.find(p => p.sub && area.name.test(p.sub.toLowerCase())) || pool.find(p => p.heading && area.name.test(p.heading.toLowerCase()));
-  if (mine) { out.heading = mine.heading; out.sub = (mine.sub && area.name.test(mine.sub.toLowerCase())) ? mine.sub : ''; }
-  else { out.heading = area.h; out.sub = area.s; }
-  out.why = 'from the wording';
+  const ar = jlAreaFor(text);
+  if (ar) { out.heading = ar.heading; out.sub = ar.sub; out.why = 'from the wording'; }
   return out;
 }
 
@@ -16928,8 +16966,8 @@ function _jlUniq(vals) {
   vals.forEach(v => { v = _jlClean(v, 60); if (v && !m.has(v.toLowerCase())) m.set(v.toLowerCase(), v); });
   return Array.from(m.values()).sort((a, b) => a.localeCompare(b));
 }
-function _jlHeadings() { return _jlUniq(loadJobLog().map(j => j.heading).concat((_jlReview || []).map(r => r.heading))); }
-function _jlSubs() { return _jlUniq(loadJobLog().map(j => j.sub).concat((_jlReview || []).map(r => r.sub))); }
+function _jlHeadings() { return _jlUniq(JL_AREAS.map(a => a.h).concat(loadJobLog().map(j => j.heading), (_jlReview || []).map(r => r.heading))); }
+function _jlSubs() { return _jlUniq(JL_AREAS.map(a => a.s).concat(loadJobLog().map(j => j.sub), (_jlReview || []).map(r => r.sub))); }
 
 /* The list in the order chosen. Sorted by heading it comes back as
    [{ heading, subs: [{ sub, items }] }]; otherwise one flat list. */
@@ -17005,6 +17043,7 @@ function openJobLog() {
               <option value="long">Sort: longest first</option>
             </select>
             <button class="btn btn-outline btn-sm" type="button" id="jl-fold" title="Close or open every heading">⇕ Collapse all</button>
+            <button class="btn btn-outline btn-sm" type="button" id="jl-refile" title="Go through every line and suggest a heading and sub-heading from the standard set. Nothing changes until you approve it.">🗂 Re-file</button>
             <span class="jl-count" id="jl-count"></span>
           </div>
           <div class="jl-list" id="jl-list"></div>
@@ -17043,6 +17082,7 @@ function openJobLog() {
       if (!lines.length) { showToast('⚠ Nothing to add — paste some lines first'); return; }
       _jlStartReview(lines);
     });
+    $('#jl-refile').addEventListener('click', _jlStartRefile);
     $('#jl-rv-back').addEventListener('click', () => { _jlReview = null; modal.classList.remove('reviewing'); });
     $('#jl-rv-go').addEventListener('click', _jlApplyReview);
     $('#jl-rv-list').addEventListener('input', e => {
@@ -17195,6 +17235,7 @@ function _jlRender() {
         }).join(''));
     }).join('');
   }
+  const rf = document.getElementById('jl-refile'); if (rf) rf.style.display = loadJobLog().length ? '' : 'none';
   if (fold) {
     fold.style.display = grouped && n ? '' : 'none';
     const keys = _jlGrouped(_jlFilter).map(H => 'h:' + H.heading.toLowerCase());
@@ -17240,12 +17281,27 @@ function _jlReviewCount() {
   const n = (_jlReview || []).filter(r => r.checked && _jlClean(r.text)).length;
   const el = document.getElementById('jl-rv-count'), go = document.getElementById('jl-rv-go');
   if (el) el.textContent = n + ' of ' + (_jlReview || []).length + ' ticked';
-  if (go) { go.textContent = n ? 'Add ' + n + ' line' + (n === 1 ? '' : 's') : 'Nothing ticked'; go.disabled = !n; }
+  if (go) { go.textContent = n ? ((_jlReview && _jlReview.refile) ? 'Re-file ' : 'Add ') + n + ' line' + (n === 1 ? '' : 's') : 'Nothing ticked'; go.disabled = !n; }
 }
 function _jlApplyReview() {
   if (!_jlReview) return;
   const picked = _jlReview.filter(r => r.checked && _jlClean(r.text));
   if (picked.some(r => _jlClean(r.sub) && !_jlClean(r.heading))) { showToast('⚠ A sub-heading needs a heading above it'); return; }
+  if (_jlReview.refile) {
+    const before = localStorage.getItem(JOB_LOG_KEY);
+    const arr = loadJobLog(); let n = 0;
+    picked.forEach(p => { const j = arr.find(x => x.id === p.id); if (!j) return;
+      const h = _jlClean(p.heading, 60), sb = h ? _jlClean(p.sub, 60) : '';
+      if ((j.heading || '') === h && (j.sub || '') === sb) return;
+      j.heading = h; j.sub = sb; j.mod = Date.now(); n++; });
+    if (n) saveJobLog(arr);
+    _jlReview = null; _jlShut.clear();
+    document.getElementById('joblog-modal').classList.remove('reviewing');
+    _jlRender();
+    if (n) showUndoToast('Re-filed ' + n + ' line' + (n === 1 ? '' : 's'), () => { localStorage.setItem(JOB_LOG_KEY, before); saveJobLog(loadJobLog()); _jlRender(); });
+    else showToast('Nothing changed');
+    return;
+  }
   const r = jlAddLines(picked.map(p => ({ text: p.text, heading: p.heading, sub: p.sub })));
   const left = _jlReview.length - r.added;
   _jlReview = null;
@@ -17255,6 +17311,35 @@ function _jlApplyReview() {
   _jlRender();
   const msg = (r.added ? '✓ Added ' + r.added + ' line' + (r.added === 1 ? '' : 's') : 'Nothing new added') + (left ? ' — ' + left + ' left out' : '');
   if (r.added) showUndoToast(msg, r.undo); else showToast(msg);
+}
+
+/* Go through the lines already in the log and suggest the standard heading
+   and sub-heading for each. Only lines whose suggestion differs are ticked. */
+function _jlStartRefile() {
+  const arr = loadJobLog();
+  if (!arr.length) { showToast('The Job Log is empty'); return; }
+  const now = j => (j.heading || '') + (j.heading && j.sub ? ' › ' + j.sub : '');
+  _jlReview = arr.map(j => {
+    const a = jlAreaFor(j.text);
+    const differs = !!a && (a.heading !== (j.heading || '') || a.sub !== (j.sub || ''));
+    return { id: j.id, text: j.text, heading: a ? a.heading : (j.heading || ''), sub: a ? a.sub : (j.sub || ''), now: now(j), none: !a, checked: differs, flag: differs ? 'similar' : 'new' };
+  });
+  _jlReview.sort((x, y) => (y.checked - x.checked));
+  _jlReview.refile = true;
+  const list = document.getElementById('jl-rv-list');
+  list.innerHTML = `<div class="jl-rv-head"><span></span><span>Job</span><span>Heading</span><span>Sub-heading</span></div>` + _jlReview.map((r, i) => `
+    <div class="jl-rv ${r.flag}${r.checked ? '' : ' off'}" data-i="${i}">
+      <input type="checkbox" ${r.checked ? 'checked' : ''} aria-label="Re-file this line">
+      <input class="jl-f jl-rv-text" type="text" value="${escapeHtml(r.text)}" readonly aria-label="Job">
+      <input class="jl-f jl-rv-h" type="text" list="jl-headings" maxlength="60" placeholder="heading" value="${escapeHtml(r.heading)}" aria-label="Heading">
+      <input class="jl-f jl-rv-s" type="text" list="jl-subs" maxlength="60" placeholder="sub-heading" value="${escapeHtml(r.sub)}" aria-label="Sub-heading">
+      <div class="jl-rv-flag">${r.checked ? `Now under <b>${escapeHtml(r.now || 'no heading')}</b>.` : r.none ? 'No suggestion — left where it is.' : 'Already under the suggested heading.'}</div>
+    </div>`).join('');
+  const n = _jlReview.filter(r => r.checked).length;
+  document.getElementById('jl-rv-hint').innerHTML = `<strong>Re-file.</strong> Every line, with the heading and sub-heading the standard set suggests. <strong>${n}</strong> would move and ${n === 1 ? 'is' : 'are'} ticked, at the top. Change any suggestion, or untick a line to leave it where it is. Nothing changes until you press the button.`;
+  _jlLists(); _jlReviewCount();
+  document.getElementById('joblog-modal').classList.add('reviewing');
+  list.scrollTop = 0;
 }
 
 /* ── Export the whole log, by heading and sub-heading ── */
@@ -29504,7 +29589,7 @@ function renderInstallRow() {
    One constant, stamped into every page header at boot rather than written
    into four blocks of markup — so bumping it is a one-line change and the
    pages can never disagree about which version they are. */
-const APP_VERSION = 'v1.42';
+const APP_VERSION = 'v1.43';
 function stampAppVersion() {
   document.querySelectorAll('.header-actions').forEach(host => {
     let el = host.querySelector('.app-version');
