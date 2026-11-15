@@ -2481,6 +2481,7 @@ textarea.sbf-input { resize: vertical; line-height: 1.45; }
       <button class="quickadd-btn" onclick="openSearchModal()" title="Search everything — weeks, quarters, Mind Dump, Daily Top 3, reminders (Ctrl/Cmd+K)">🔎 Search <span class="qa-kbd">Ctrl+K</span></button>
       <button class="glance-btn" onclick="openAssignedSummary()" style="margin-top:6px;background:var(--accent-delegate);" title="See every task you've delegated (rate 9), grouped by person">📋 Delegated tasks</button>
       <button class="glance-btn" onclick="openKeepBridge()" style="margin-top:6px;background:var(--accent-keep);" title="Paste dictated / Keep lines in as tasks, or copy a list out to Google Keep">📝 Keep / voice bridge</button>
+      <button class="glance-btn" onclick="openJobLog()" style="margin-top:6px;" title="A plain list of the jobs I do — one line each, with a heading, a 1-2-3 and how long it takes. Not tasks.">📒 Job Log</button>
       <button class="glance-btn" onclick="openChkLibrary()" style="margin-top:6px;background:var(--gold-dark);" title="Reusable checklists you can attach to any task">☑ Checklists</button>
       <button class="glance-btn" onclick="openTimeReport()" style="margin-top:6px;background:var(--accent-time);" title="See where your time goes — totals by category and subcategory">📊 Time report</button>
       <button class="glance-btn" onclick="openCompanion()" style="margin-top:6px;background:var(--navy);" title="Open the phone / tablet companion view">📱 Phone / Tablet view</button>
@@ -4718,6 +4719,7 @@ body.companion-locked { overflow: hidden; }
         <button class="btn btn-navy btn-sm" onclick="saveMindDumpExplicit()" style="width:100%;justify-content:center;margin-bottom:6px;">✓ Save Mind Dump</button>
         <button class="btn btn-sm" onclick="openAssignedSummary()" style="width:100%;justify-content:center;margin-bottom:6px;background:var(--accent-delegate);color:#fff;" title="See every task you've delegated (rate 9), grouped by person">📋 Delegated tasks</button>
         <button class="btn btn-sm" onclick="openKeepBridge()" style="width:100%;justify-content:center;margin-bottom:6px;background:var(--accent-keep);color:#fff;" title="Paste dictated/Keep lines in as tasks, or copy a list out to paste into Google Keep">📝 Keep / voice bridge</button>
+        <button class="btn btn-sm btn-outline" onclick="openJobLog()" style="width:100%;justify-content:center;margin-bottom:6px;" title="A plain list of the jobs I do — one line each. Not tasks.">📒 Job Log</button>
         <button class="btn btn-sm" onclick="openChkLibrary()" style="width:100%;justify-content:center;margin-bottom:6px;background:var(--gold-dark);color:#fff;" title="Reusable checklists you can attach to any task">☑ Checklists</button>
         <button class="btn btn-sm" onclick="openTimeReport()" style="width:100%;justify-content:center;margin-bottom:6px;background:var(--accent-time);color:#fff;" title="See where your time goes — totals by category and subcategory">📊 Time report</button>
         <button class="btn btn-gold btn-sm" onclick="sendMindDumpSnapshot()" style="width:100%;justify-content:center;">📧 Send Snapshot</button>
@@ -5976,6 +5978,51 @@ body.companion-locked { overflow: hidden; }
 }
 .keep-tab.active { background: var(--navy); color: #fff; border-color: var(--navy); }
 .keep-hint { font-size: 12.5px; color: var(--muted); line-height: 1.55; margin: 0 0 10px; }
+/* ══ v1.41 ══ Job Log — a plain list of the jobs I do: one line each, with an
+   optional heading, a 1-2-3 for how hard it is, and roughly how long it takes. */
+#joblog-modal .modal { max-width: 900px; width: 96%; padding: 22px 24px; max-height: calc(100vh - 24px); max-height: calc(100dvh - 24px); display: flex; flex-direction: column; }
+.jl-hint { font-size: 12.5px; color: var(--muted); line-height: 1.5; margin: 0 0 10px; }
+.jl-add { display: flex; gap: 8px; margin-bottom: 8px; }
+.jl-add input[type=text] { flex: 1; min-width: 0; font-family: inherit; font-size: 14px; padding: 9px 11px; border: 1px solid var(--border); border-radius: 8px; color: var(--ink); }
+.jl-add input[type=text]:focus, .jl-tools input:focus, .jl-tools select:focus { outline: none; border-color: var(--navy); }
+.jl-paste { display: none; margin-bottom: 8px; }
+.jl-paste.open { display: block; }
+.jl-paste-row { display: flex; gap: 8px; align-items: center; margin-top: 6px; flex-wrap: wrap; }
+.jl-paste-row label { font-size: 12.5px; color: var(--muted); }
+.jl-paste-row input[type=text] { font-family: inherit; font-size: 13px; padding: 6px 9px; border: 1px solid var(--border); border-radius: 7px; width: 190px; }
+.jl-tools { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 4px 0 8px; }
+.jl-tools input[type=text], .jl-tools select { font-family: inherit; font-size: 13px; padding: 7px 9px; border: 1px solid var(--border); border-radius: 7px; color: var(--ink); background: #fff; }
+.jl-tools input[type=text] { flex: 1 1 160px; min-width: 0; }
+.jl-count { font-size: 12.5px; color: var(--muted); margin-left: auto; white-space: nowrap; }
+.jl-list { flex: 1 1 auto; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; min-height: 120px; background: #fff; }
+.jl-empty { padding: 26px 18px; text-align: center; color: var(--muted); font-size: 13.5px; line-height: 1.6; }
+.jl-group { background: var(--navy); color: #fff; font-size: 12px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; padding: 5px 10px; display: flex; justify-content: space-between; gap: 10px; position: sticky; top: 0; z-index: 1; }
+.jl-group span { font-weight: 400; text-transform: none; letter-spacing: 0; opacity: .85; }
+.jl-row { display: grid; grid-template-columns: minmax(0, 1fr) 150px 84px 74px 26px; gap: 8px; align-items: center; padding: 5px 8px 5px 10px; border-bottom: 1px solid var(--sky-light); }
+.jl-row:nth-child(even) { background: var(--cream); }
+.jl-row:hover { background: #fdf7e3; }
+.jl-text { font-size: 14px; line-height: 1.4; color: var(--ink); padding: 3px 4px; border-radius: 5px; outline: none; overflow-wrap: anywhere; white-space: pre-wrap; cursor: text; }
+.jl-text:focus { background: #fff; box-shadow: 0 0 0 1.5px var(--navy); }
+.jl-head, .jl-mins { font-family: inherit; font-size: 12.5px; padding: 4px 6px; border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--navy); min-width: 0; width: 100%; box-sizing: border-box; }
+.jl-mins { text-align: right; color: var(--ink); }
+.jl-head::placeholder, .jl-mins::placeholder { color: #a9b4c2; }
+.jl-row:hover .jl-head, .jl-row:hover .jl-mins, .jl-head:focus, .jl-mins:focus { border-color: var(--border); background: #fff; outline: none; }
+.jl-lvl { display: inline-flex; border: 1px solid var(--border); border-radius: 7px; overflow: hidden; background: #fff; }
+.jl-lvl button { border: none; background: transparent; font-family: inherit; font-size: 12.5px; font-weight: 700; color: #9aa7b8; width: 27px; height: 24px; padding: 0; cursor: pointer; }
+.jl-lvl button + button { border-left: 1px solid var(--border); }
+.jl-lvl button.on[data-l="1"] { background: #4f8265; color: #fff; }
+.jl-lvl button.on[data-l="2"] { background: var(--gold); color: #fff; }
+.jl-lvl button.on[data-l="3"] { background: #b5483a; color: #fff; }
+.jl-del { border: none; background: transparent; color: #b9c3d0; font-size: 14px; cursor: pointer; padding: 2px; border-radius: 5px; }
+.jl-del:hover { color: #b5483a; background: #fbeeee; }
+.jl-foot { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 12px; }
+.jl-foot .jl-key { font-size: 12px; color: var(--muted); margin-right: auto; }
+@media (max-width: 700px) {
+  #joblog-modal .modal { padding: 16px 12px; }
+  .jl-row { grid-template-columns: minmax(0, 1fr) 84px 62px 26px; }
+  .jl-text { grid-column: 1 / -1; }
+  .jl-head { grid-column: 1; }
+}
 .keep-textarea {
   width: 100%; box-sizing: border-box; font-family: inherit; font-size: 14px; line-height: 1.5;
   padding: 11px; border: 1px solid var(--border); border-radius: 8px; resize: vertical; color: var(--ink);
@@ -6441,6 +6488,7 @@ textarea.md-row-text {
         <button class="btn btn-navy btn-sm" onclick="saveCurrentQuarter()" style="width:100%;justify-content:center;margin-bottom:6px;">✓ Save Quarter</button>
         <button class="btn btn-sm" onclick="openAssignedSummary()" style="width:100%;justify-content:center;margin-bottom:6px;background:var(--accent-delegate);color:#fff;" title="See every task you've delegated (rate 9), grouped by person">📋 Delegated tasks</button>
         <button class="btn btn-sm" onclick="openKeepBridge()" style="width:100%;justify-content:center;margin-bottom:6px;background:var(--accent-keep);color:#fff;" title="Paste dictated / Keep lines in as tasks, or copy a list out to Google Keep">📝 Keep / voice bridge</button>
+        <button class="btn btn-sm btn-outline" onclick="openJobLog()" style="width:100%;justify-content:center;margin-bottom:6px;" title="A plain list of the jobs I do — one line each. Not tasks.">📒 Job Log</button>
         <button class="btn btn-sm" onclick="openChkLibrary()" style="width:100%;justify-content:center;margin-bottom:6px;background:var(--gold-dark);color:#fff;" title="Reusable checklists you can attach to any task">☑ Checklists</button>
         <button class="btn btn-sm" onclick="openTimeReport()" style="width:100%;justify-content:center;margin-bottom:6px;background:var(--accent-time);color:#fff;" title="See where your time goes — totals by category and subcategory">📊 Time report</button>
         <button class="btn btn-gold btn-sm" onclick="sendQuarterlySnapshot()" style="width:100%;justify-content:center;">📧 Send Snapshot</button>
@@ -16662,6 +16710,322 @@ function saveAssignModal() {
 //  copy-in / copy-out text bridge that pairs with your phone keyboard's mic
 //  and Google Keep's voice notes / the car's memo.
 // ═══════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════
+//  v1.41 — JOB LOG
+//  A plain list of the jobs I do, for scanning rather than doing: one line
+//  per job, an optional heading (Accounting, IT…), a 1-2-3 for how hard it
+//  is, and roughly how long it takes. Lines are typed, pasted from a Google
+//  Keep note, or sent from the Keep / voice bridge. Nothing here is a task:
+//  it never appears in a week, the Top 3 or the Mind Dump.
+//  Storage: sb_job_log — [{ id, text, heading, level (0-3), mins, added, mod }]
+// ═══════════════════════════════════════════════════════════════════
+const JOB_LOG_KEY = 'sb_job_log';
+const JL_LEVELS = { 1: 'Easy', 2: 'Medium', 3: 'Hard' };
+let _jlSort = 'added', _jlFilter = '';
+
+function loadJobLog() {
+  try {
+    const a = JSON.parse(localStorage.getItem(JOB_LOG_KEY) || '[]');
+    return Array.isArray(a) ? a.filter(j => j && typeof j === 'object' && !Array.isArray(j) && typeof j.id === 'string') : [];
+  } catch (_) { return []; }
+}
+function saveJobLog(arr) {
+  localStorage.setItem(JOB_LOG_KEY, JSON.stringify(arr));
+  try { if (typeof syncUploadDebounced === 'function') syncUploadDebounced(); } catch (_) {}
+}
+function _jlNorm(t) { try { return mdNormText(t); } catch (_) { return String(t || '').trim().toLowerCase().replace(/\s+/g, ' '); } }
+function _jlClean(t) { return String(t == null ? '' : t).replace(/\s+/g, ' ').trim().slice(0, 600); }
+
+/* "45", "45m", "1.5h", "2 hrs", "1:30", "1h 20" → minutes; anything else → null */
+function jlParseMins(s) {
+  s = String(s == null ? '' : s).trim().toLowerCase();
+  if (!s) return null;
+  let m = s.match(/^(\d{1,3}):(\d{1,2})$/);
+  if (m) return Math.min(6000, (+m[1]) * 60 + (+m[2]));
+  m = s.match(/^(\d+(?:\.\d+)?)\s*(?:h|hr|hrs|hour|hours)\s*(?:(\d{1,2})\s*(?:m|min|mins|minutes)?)?$/);
+  if (m) return Math.min(6000, Math.round(parseFloat(m[1]) * 60 + (m[2] ? +m[2] : 0)));
+  m = s.match(/^(\d+(?:\.\d+)?)\s*(?:m|min|mins|minute|minutes)?$/);
+  if (m) return Math.min(6000, Math.round(parseFloat(m[1])));
+  return null;
+}
+function jlFmtMins(n) {
+  if (typeof n !== 'number' || !isFinite(n) || n <= 0) return '';
+  if (n < 60) return n + ' min';
+  const h = Math.floor(n / 60), r = n % 60;
+  return h + ' h' + (r ? ' ' + r : '');
+}
+
+/* Add lines. Lines already in the log (same words) are left out.
+   → { added, skipped, undo } */
+function jlAddLines(lines, heading) {
+  const arr = loadJobLog();
+  const have = new Set(arr.map(j => _jlNorm(j.text)));
+  const today = (typeof todayDateKey === 'function') ? todayDateKey() : new Date().toISOString().slice(0, 10);
+  const ids = new Set(); let skipped = 0;
+  const head = _jlClean(heading).slice(0, 60);
+  (lines || []).forEach(t => {
+    t = _jlClean(t);
+    const k = _jlNorm(t);
+    if (!t) return;
+    if (have.has(k)) { skipped++; return; }
+    have.add(k);
+    const id = 'j' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+    ids.add(id);
+    arr.push({ id, text: t, heading: head, level: 0, mins: null, added: today, mod: Date.now() });
+  });
+  if (ids.size) saveJobLog(arr);
+  return { added: ids.size, skipped, undo: () => { saveJobLog(loadJobLog().filter(j => !ids.has(j.id))); _jlRender(); } };
+}
+function _jlStripBullet(l) { return String(l).trim().replace(/^[\s]*(?:[-*•·▪◦]|\[[ xX]?\]|☐|☑|\d+[.)])\s+/, '').trim(); }
+
+function _jlHeadings() {
+  const m = new Map();
+  loadJobLog().forEach(j => { const h = _jlClean(j.heading); if (h && !m.has(h.toLowerCase())) m.set(h.toLowerCase(), h); });
+  return Array.from(m.values()).sort((a, b) => a.localeCompare(b));
+}
+/* The list in the order chosen. → [{ group, items }] (one group unless sorted by heading) */
+function _jlArranged(sort, filter) {
+  let arr = loadJobLog();
+  const q = _jlNorm(filter || '');
+  if (q) arr = arr.filter(j => (_jlNorm(j.text) + ' ' + _jlNorm(j.heading)).indexOf(q) >= 0);
+  const idx = new Map(arr.map((j, i) => [j.id, i]));
+  const by = {
+    added:   (a, b) => idx.get(a.id) - idx.get(b.id),
+    newest:  (a, b) => idx.get(b.id) - idx.get(a.id),
+    az:      (a, b) => a.text.localeCompare(b.text),
+    hard:    (a, b) => (b.level || 0) - (a.level || 0) || idx.get(a.id) - idx.get(b.id),
+    easy:    (a, b) => ((a.level || 9) - (b.level || 9)) || idx.get(a.id) - idx.get(b.id),
+    long:    (a, b) => (b.mins || 0) - (a.mins || 0) || idx.get(a.id) - idx.get(b.id),
+    heading: (a, b) => idx.get(a.id) - idx.get(b.id)
+  };
+  arr = arr.slice().sort(by[sort] || by.added);
+  if (sort !== 'heading') return [{ group: null, items: arr }];
+  const groups = new Map();
+  arr.forEach(j => { const h = _jlClean(j.heading); const k = h.toLowerCase(); if (!groups.has(k)) groups.set(k, { group: h, items: [] }); groups.get(k).items.push(j); });
+  return Array.from(groups.values()).sort((a, b) => (!a.group) - (!b.group) || a.group.localeCompare(b.group));
+}
+
+function openJobLog() {
+  let modal = document.getElementById('joblog-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'joblog-modal';
+    modal.className = 'modal-overlay';
+    modal.innerHTML = `
+      <div class="modal">
+        <div class="modal-head">
+          <h2 class="modal-title">📒 Job Log</h2>
+          <button class="modal-close" type="button" onclick="closeJobLog()" aria-label="Close">✕</button>
+        </div>
+        <p class="jl-hint">A running list of the jobs I do: one line each. These are <strong>not tasks</strong> and never show up in a week. Give a line a heading, mark it 1 easy · 2 medium · 3 hard, and note roughly how long it takes.</p>
+        <div class="jl-add">
+          <input type="text" id="jl-new" placeholder="Type a job and press Enter…" maxlength="600" aria-label="New job">
+          <button class="btn btn-navy btn-sm" type="button" id="jl-add-btn">＋ Add</button>
+          <button class="btn btn-outline btn-sm" type="button" id="jl-paste-btn" title="Paste a whole Google Keep note: each line becomes one job">📝 Paste from Keep</button>
+        </div>
+        <div class="jl-paste" id="jl-paste">
+          <textarea id="jl-paste-text" class="keep-textarea" rows="6" placeholder="Paste a Keep note here. Each line becomes one job.&#10;Lines already in the log are left out, so you can paste the whole note again later."></textarea>
+          <div class="jl-paste-row">
+            <label for="jl-paste-head">Heading for these (optional):</label>
+            <input type="text" id="jl-paste-head" list="jl-headings" maxlength="60" placeholder="e.g. Accounting">
+            <button class="btn btn-navy btn-sm" type="button" id="jl-paste-go">Add these lines</button>
+            <button class="btn btn-outline btn-sm" type="button" id="jl-paste-cancel">Cancel</button>
+          </div>
+        </div>
+        <div class="jl-tools">
+          <input type="text" id="jl-filter" placeholder="Filter…" aria-label="Filter the list">
+          <select id="jl-sort" aria-label="Sort by">
+            <option value="added">Sort: as added</option>
+            <option value="newest">Sort: newest first</option>
+            <option value="heading">Sort: by heading</option>
+            <option value="az">Sort: A–Z</option>
+            <option value="hard">Sort: hardest first</option>
+            <option value="easy">Sort: easiest first</option>
+            <option value="long">Sort: longest first</option>
+          </select>
+          <span class="jl-count" id="jl-count"></span>
+        </div>
+        <datalist id="jl-headings"></datalist>
+        <div class="jl-list" id="jl-list"></div>
+        <div class="jl-foot">
+          <span class="jl-key">Click any line to edit it. Time: 45, 1.5h or 1:30.</span>
+          <button class="btn btn-outline btn-sm" type="button" onclick="jlExport('copy')">📋 Copy</button>
+          <button class="btn btn-outline btn-sm" type="button" onclick="jlExport('txt')">⬇ Text file</button>
+          <button class="btn btn-navy btn-sm" type="button" onclick="jlExport('doc')">⬇ Word document</button>
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+    const $ = s => modal.querySelector(s);
+    const addOne = () => {
+      const inp = $('#jl-new'); const t = _jlClean(inp.value);
+      if (!t) return;
+      const r = jlAddLines([t], '');
+      if (!r.added) { showToast('That line is already in the log'); return; }
+      inp.value = ''; _jlRender(); inp.focus();
+    };
+    $('#jl-add-btn').addEventListener('click', addOne);
+    $('#jl-new').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); addOne(); } });
+    $('#jl-paste-btn').addEventListener('click', () => { $('#jl-paste').classList.toggle('open'); if ($('#jl-paste').classList.contains('open')) $('#jl-paste-text').focus(); });
+    $('#jl-paste-cancel').addEventListener('click', () => $('#jl-paste').classList.remove('open'));
+    $('#jl-paste-go').addEventListener('click', () => {
+      const lines = ($('#jl-paste-text').value || '').split(/\r?\n/).map(_jlStripBullet).filter(Boolean);
+      if (!lines.length) { showToast('⚠ Nothing to add — paste some lines first'); return; }
+      const r = jlAddLines(lines, $('#jl-paste-head').value);
+      $('#jl-paste-text').value = ''; $('#jl-paste-head').value = ''; $('#jl-paste').classList.remove('open');
+      _jlRender();
+      const msg = (r.added ? '✓ Added ' + r.added + ' line' + (r.added === 1 ? '' : 's') : 'Nothing new') +
+                  (r.skipped ? ' — ' + r.skipped + ' already in the log' : '');
+      if (r.added) showUndoToast(msg, r.undo); else showToast(msg);
+    });
+    let ft = null;
+    $('#jl-filter').addEventListener('input', e => { clearTimeout(ft); ft = setTimeout(() => { _jlFilter = e.target.value; _jlRender(); }, 150); });
+    $('#jl-sort').addEventListener('change', e => { _jlSort = e.target.value; _jlRender(); });
+    const list = $('#jl-list');
+    const rowOf = el => { const r = el.closest('.jl-row'); return r ? r.dataset.id : null; };
+    const patch = (id, fn) => { const arr = loadJobLog(); const j = arr.find(x => x.id === id); if (!j) return null; fn(j); j.mod = Date.now(); saveJobLog(arr); return j; };
+    list.addEventListener('click', e => {
+      const lb = e.target.closest('.jl-lvl button');
+      if (lb) {
+        const id = rowOf(lb), l = +lb.dataset.l;
+        const j = patch(id, x => { x.level = x.level === l ? 0 : l; });
+        if (j) lb.parentElement.querySelectorAll('button').forEach(b => b.classList.toggle('on', +b.dataset.l === j.level));
+        _jlCount(); return;
+      }
+      const del = e.target.closest('.jl-del');
+      if (del) {
+        const id = rowOf(del); const arr = loadJobLog(); const i = arr.findIndex(x => x.id === id);
+        if (i < 0) return;
+        const gone = arr.splice(i, 1)[0];
+        saveJobLog(arr); _jlRender();
+        showUndoToast('Removed “' + gone.text.slice(0, 40) + (gone.text.length > 40 ? '…' : '') + '”', () => {
+          const cur = loadJobLog(); if (!cur.some(x => x.id === gone.id)) { cur.splice(Math.min(i, cur.length), 0, gone); saveJobLog(cur); } _jlRender();
+        });
+      }
+    });
+    list.addEventListener('keydown', e => {
+      if (e.key === 'Enter' && e.target.matches('.jl-text, .jl-head, .jl-mins')) { e.preventDefault(); e.target.blur(); }
+      if (e.key === 'Escape' && e.target.matches('.jl-text')) { e.stopPropagation(); e.target.textContent = e.target.dataset.was || ''; e.target.blur(); }
+    });
+    list.addEventListener('focusin', e => { if (e.target.matches('.jl-text')) e.target.dataset.was = e.target.textContent; });
+    list.addEventListener('focusout', e => {
+      const t = e.target, id = t.closest ? rowOf(t) : null;
+      if (!id) return;
+      if (t.matches('.jl-text')) {
+        const v = _jlClean(t.textContent);
+        if (!v) { t.textContent = t.dataset.was || ''; return; }       // a line is removed with ✕, not by emptying it
+        if (v !== t.dataset.was) patch(id, x => { x.text = v; });
+        t.textContent = v;
+      } else if (t.matches('.jl-head')) {
+        const v = _jlClean(t.value).slice(0, 60);
+        const j = loadJobLog().find(x => x.id === id);
+        if (j && v !== (j.heading || '')) { patch(id, x => { x.heading = v; }); if (_jlSort === 'heading') _jlRender(); else _jlHeadList(); }
+      } else if (t.matches('.jl-mins')) {
+        const raw = t.value.trim(); const n = jlParseMins(raw);
+        if (raw && n === null) { showToast('⚠ Time not understood — try 45, 1.5h or 1:30'); const j = loadJobLog().find(x => x.id === id); t.value = j ? jlFmtMins(j.mins) : ''; return; }
+        const j = loadJobLog().find(x => x.id === id);
+        if (j && (j.mins || null) !== (n || null)) patch(id, x => { x.mins = n || null; });
+        t.value = jlFmtMins(n); _jlCount();
+      }
+    });
+    modal.addEventListener('mousedown', e => { if (e.target === modal) closeJobLog(); });
+  }
+  modal.querySelector('#jl-sort').value = _jlSort;
+  modal.querySelector('#jl-filter').value = _jlFilter;
+  _jlRender();
+  modal.classList.add('open');
+}
+function closeJobLog() {
+  const m = document.getElementById('joblog-modal');
+  if (!m) return;
+  if (document.activeElement && m.contains(document.activeElement)) document.activeElement.blur();   // save an edit in progress
+  m.classList.remove('open');
+}
+function _jlHeadList() {
+  const dl = document.getElementById('jl-headings');
+  if (dl) dl.innerHTML = _jlHeadings().map(h => `<option value="${escapeHtml(h)}"></option>`).join('');
+}
+function _jlCount() {
+  const el = document.getElementById('jl-count');
+  if (!el) return;
+  const all = loadJobLog();
+  const mins = all.reduce((s, j) => s + (j.mins > 0 ? j.mins : 0), 0);
+  const shown = _jlArranged(_jlSort, _jlFilter).reduce((s, g) => s + g.items.length, 0);
+  el.textContent = (shown !== all.length ? shown + ' of ' : '') + all.length + ' job' + (all.length === 1 ? '' : 's') + (mins ? ' · ' + jlFmtMins(mins) + ' noted' : '');
+}
+function _jlRender() {
+  const list = document.getElementById('jl-list');
+  if (!list) return;
+  const groups = _jlArranged(_jlSort, _jlFilter);
+  const row = j => `
+    <div class="jl-row" data-id="${escapeHtml(j.id)}">
+      <div class="jl-text" contenteditable="plaintext-only" spellcheck="true" role="textbox" aria-label="Job">${escapeHtml(j.text)}</div>
+      <input class="jl-head" type="text" list="jl-headings" maxlength="60" placeholder="heading" value="${escapeHtml(j.heading || '')}" aria-label="Heading">
+      <span class="jl-lvl" role="group" aria-label="How hard">${[1, 2, 3].map(l => `<button type="button" data-l="${l}" class="${j.level === l ? 'on' : ''}" title="${l} — ${JL_LEVELS[l]}">${l}</button>`).join('')}</span>
+      <input class="jl-mins" type="text" placeholder="time" value="${escapeHtml(jlFmtMins(j.mins))}" aria-label="How long it takes">
+      <button class="jl-del" type="button" title="Remove this line" aria-label="Remove">✕</button>
+    </div>`;
+  const total = groups.reduce((s, g) => s + g.items.length, 0);
+  if (!total) {
+    list.innerHTML = `<div class="jl-empty">${loadJobLog().length ? 'Nothing matches that filter.' : 'Nothing here yet.<br>Type a job above, or use <strong>Paste from Keep</strong> to bring in a whole note — one line per job.'}</div>`;
+  } else {
+    list.innerHTML = groups.map(g => {
+      const m = g.items.reduce((s, j) => s + (j.mins > 0 ? j.mins : 0), 0);
+      return (g.group === null ? '' : `<div class="jl-group">${escapeHtml(g.group || 'No heading')}<span>${g.items.length}${m ? ' · ' + jlFmtMins(m) : ''}</span></div>`) + g.items.map(row).join('');
+    }).join('');
+  }
+  _jlHeadList(); _jlCount();
+}
+
+/* Export the whole log, grouped by heading: copy, a text file, or a Word document. */
+function _jlExportGroups() { return _jlArranged('heading', ''); }
+function _jlText() {
+  const out = ['JOB LOG — ' + new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }), ''];
+  _jlExportGroups().forEach(g => {
+    out.push((g.group || 'No heading').toUpperCase());
+    g.items.forEach(j => out.push('  - ' + j.text + (j.level ? '  [' + j.level + ' ' + JL_LEVELS[j.level].toLowerCase() + ']' : '') + (j.mins ? '  (' + jlFmtMins(j.mins) + ')' : '')));
+    out.push('');
+  });
+  return out.join('\r\n');
+}
+function _jlDoc() {
+  const e = escapeHtml, date = new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
+  const all = loadJobLog(), mins = all.reduce((s, j) => s + (j.mins > 0 ? j.mins : 0), 0);
+  const lvl = l => l ? `<span style="color:${({ 1: '#4f8265', 2: '#a8872e', 3: '#b5483a' })[l]};font-weight:bold">${l} ${JL_LEVELS[l]}</span>` : '';
+  const body = _jlExportGroups().map(g => {
+    const m = g.items.reduce((s, j) => s + (j.mins > 0 ? j.mins : 0), 0);
+    return `<h2 style="font-family:Georgia,serif;font-size:14pt;color:#ffffff;background:#29549B;padding:4pt 8pt;margin:14pt 0 0 0">${e(g.group || 'No heading')} <span style="font-size:10pt;font-weight:normal">(${g.items.length}${m ? ', ' + jlFmtMins(m) : ''})</span></h2>
+<table style="border-collapse:collapse;width:100%;font-family:Calibri,Arial,sans-serif;font-size:11pt">
+<tr style="background:#f8f6f1"><th style="text-align:left;border-bottom:1.5pt solid #c9a84c;padding:3pt 6pt">Job</th><th style="text-align:left;border-bottom:1.5pt solid #c9a84c;padding:3pt 6pt;width:70pt">Effort</th><th style="text-align:left;border-bottom:1.5pt solid #c9a84c;padding:3pt 6pt;width:60pt">Time</th></tr>
+${g.items.map(j => `<tr><td style="border-bottom:.5pt solid #c8d3e0;padding:3pt 6pt">${e(j.text)}</td><td style="border-bottom:.5pt solid #c8d3e0;padding:3pt 6pt">${lvl(j.level)}</td><td style="border-bottom:.5pt solid #c8d3e0;padding:3pt 6pt">${e(jlFmtMins(j.mins))}</td></tr>`).join('\n')}
+</table>`;
+  }).join('\n');
+  return `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8"><title>Job Log</title>
+<!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View><w:Zoom>100</w:Zoom></w:WordDocument></xml><![endif]-->
+<style>@page { size: 8.5in 11in; margin: 0.8in; } body { font-family: Calibri, Arial, sans-serif; }</style></head><body>
+<h1 style="font-family:Georgia,serif;font-size:22pt;color:#29549B;margin:0;border-bottom:2.5pt solid #c9a84c;padding-bottom:4pt">Job Log</h1>
+<p style="font-family:Calibri,Arial,sans-serif;font-size:10.5pt;color:#5a6a7e;margin:4pt 0 0 0">${e(date)} · ${all.length} job${all.length === 1 ? '' : 's'}${mins ? ' · ' + jlFmtMins(mins) + ' noted' : ''}</p>
+${body}
+</body></html>`;
+}
+function jlExport(kind) {
+  if (!loadJobLog().length) { showToast('⚠ The Job Log is empty'); return; }
+  if (kind === 'copy') {
+    const t = _jlText();
+    const done = () => showToast('📋 Job Log copied');
+    try { navigator.clipboard.writeText(t).then(done, () => showToast('⚠ Could not copy — use the text file')); } catch (_) { showToast('⚠ Could not copy — use the text file'); }
+    return;
+  }
+  const stamp = (typeof todayDateKey === 'function') ? todayDateKey() : new Date().toISOString().slice(0, 10);
+  const blob = kind === 'doc' ? new Blob(['﻿', _jlDoc()], { type: 'application/msword' })
+                              : new Blob(['﻿', _jlText()], { type: 'text/plain;charset=utf-8' });
+  const a = document.createElement('a');
+  const url = URL.createObjectURL(blob);
+  a.href = url; a.download = 'Job-Log-' + stamp + (kind === 'doc' ? '.doc' : '.txt');
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+  showToast(kind === 'doc' ? '⬇ Word document downloaded' : '⬇ Text file downloaded');
+}
+
 const KEEP_BRIDGE_DEFAULT_GROUP = 'unfiltered';   // v1.9: Keep imports land in Unfiltered Ideas
 const KEEP_BRIDGE_EXPORT_GROUP = 'future';        // export still defaults to Business ideas
 
@@ -16781,11 +17145,12 @@ function _keepSkipDupes() {
    be pointed somewhere else. Promises Made is a destination too, for the
    business or personal list. */
 const KEEP_PROMISE_DESTS = { 'promise:business': 'Promises Made \u2014 Business', 'promise:personal': 'Promises Made \u2014 Personal' };
-function _keepDestLabel(d) { return KEEP_PROMISE_DESTS[d] || MIND_DUMP_GROUP_LABELS[d] || d; }
+function _keepDestLabel(d) { return d === 'joblog' ? 'Job Log' : (KEEP_PROMISE_DESTS[d] || MIND_DUMP_GROUP_LABELS[d] || d); }
 function _keepDestOptions(selected) {
   const opt = (v, l) => `<option value="${v}"${v === selected ? ' selected' : ''}>${escapeHtml(l)}</option>`;
   return '<optgroup label="Mind Dump">' + MIND_DUMP_GROUPS.map(g => opt(g, MIND_DUMP_GROUP_LABELS[g])).join('') + '</optgroup>' +
-         '<optgroup label="Promises Made">' + Object.keys(KEEP_PROMISE_DESTS).map(d => opt(d, KEEP_PROMISE_DESTS[d])).join('') + '</optgroup>';
+         '<optgroup label="Promises Made">' + Object.keys(KEEP_PROMISE_DESTS).map(d => opt(d, KEEP_PROMISE_DESTS[d])).join('') + '</optgroup>' +
+         '<optgroup label="Not a task">' + opt('joblog', 'Job Log \u2014 jobs I do') + '</optgroup>';
 }
 let _keepRows = [];
 /* Where each text already is: anywhere in the Mind Dump, or among the promises. */
@@ -16798,6 +17163,7 @@ function _keepWhereAlready() {
   ['business', 'personal'].forEach(m => {
     try { loadPromises(m).forEach(p => { const k = mdNormText(p.what || ''); if (k && !where.has(k)) where.set(k, KEEP_PROMISE_DESTS['promise:' + m]); }); } catch (_) {}
   });
+  try { loadJobLog().forEach(j => { const k = mdNormText(j.text || ''); if (k && !where.has(k)) where.set(k, 'the Job Log'); }); } catch (_) {}
   return where;
 }
 function _keepCountLine() {
@@ -16874,6 +17240,11 @@ function keepBridgeImport() {
   const undos = [], parts = [];
   let promisesTouched = false;
   byDest.forEach((lines, dest) => {
+    if (dest === 'joblog') {
+      const jr = jlAddLines(lines, '');
+      if (jr.added) { parts.push(jr.added + ' to the Job Log'); undos.push(jr.undo); }
+      return;
+    }
     if (KEEP_PROMISE_DESTS[dest]) {
       undos.push(_keepAddPromises(lines, dest.slice(8)));
       promisesTouched = true;
@@ -19132,7 +19503,9 @@ function _promStampAndRecord(mode, next) {
   try { prev = JSON.parse(localStorage.getItem(PROMISES_KEYS[mode]) || '[]'); } catch (_) { prev = []; }
   if (!Array.isArray(prev)) prev = [];
   prev = prev.filter(p => p && typeof p === 'object' && !Array.isArray(p));
-  const sig = r => { const k = Object.keys(r).filter(x => x !== 'mod').sort(); return JSON.stringify(k.map(x => [x, r[x]])); };
+  // v1.41: the daily "overdue — notified" mark is not an edit. Counting it as one made the
+  // desktop's copy of an overdue promise look newer than a real change made on the phone.
+  const sig = r => { const k = Object.keys(r).filter(x => x !== 'mod' && x !== 'notified').sort(); return JSON.stringify(k.map(x => [x, r[x]])); };
   const prevByKey = new Map();
   prev.forEach(p => { const k = _promKey(p); if (!prevByKey.has(k)) prevByKey.set(k, p); });
   const now = Date.now(), present = new Set();
@@ -23169,6 +23542,7 @@ const SYNC_LS_KEYS = [
   'sb_setup_prefs',
   'sb_promises_business',
   'sb_promises_personal',
+  'sb_job_log',          // v1.41: the Job Log
   'sb_reminders',
   'sb_share_with',
   'sb_save_pref',
@@ -28843,7 +29217,7 @@ function renderInstallRow() {
    One constant, stamped into every page header at boot rather than written
    into four blocks of markup — so bumping it is a one-line change and the
    pages can never disagree about which version they are. */
-const APP_VERSION = 'v1.40';
+const APP_VERSION = 'v1.41';
 function stampAppVersion() {
   document.querySelectorAll('.header-actions').forEach(host => {
     let el = host.querySelector('.app-version');
@@ -33327,7 +33701,7 @@ function _syncHash(str) {
   h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
   return (h2 >>> 0).toString(36) + (h1 >>> 0).toString(36);
 }
-const _SYNC_LIST_KEYS = ['sb_promises_business', 'sb_promises_personal', 'sb_checklist_templates', 'sb_time_sessions'];
+const _SYNC_LIST_KEYS = ['sb_promises_business', 'sb_promises_personal', 'sb_checklist_templates', 'sb_time_sessions', 'sb_job_log'];
 const _SYNC_MAP_KEYS  = ['sb_checklist_instances', 'sb_daily3_by_date', 'sb_reminders_injected'];
 const _SYNC_SET_KEYS  = ['sb_index', 'sb_quarter_index'];
 const _SYNC_REM_LISTS = { 'sb_reminders.business': ['business'], 'sb_reminders.personal': ['personal'],
@@ -33442,7 +33816,7 @@ function _syncBaseOf(u) {
     if (k.indexOf('W|') === 0) keep = k.slice(2 + 'sb_week_'.length) >= wkFrom;
     else if (k.indexOf('Q|') === 0) keep = k.slice(2 + 'sb_quarter_'.length) >= qFrom;
     else if (k.indexOf('M|sb_daily3_by_date|') === 0) keep = k.slice('M|sb_daily3_by_date|'.length) >= dFrom;
-    else keep = k === 'T|top3' || k.indexOf('K|') === 0 || k.indexOf('I|sb_promises_') === 0 || k.indexOf('I|sb_reminders.') === 0 ||
+    else keep = k === 'T|top3' || k.indexOf('K|') === 0 || k.indexOf('I|sb_promises_') === 0 || k.indexOf('I|sb_job_log|') === 0 || k.indexOf('I|sb_reminders.') === 0 ||
                 k.indexOf('M|sb_checklist_instances|') === 0 || k.indexOf('I|sb_checklist_templates|') === 0;
     if (keep && x.s.length <= 20000) v[k] = x.v;
   });
@@ -33690,6 +34064,7 @@ function _syncUnitLabel(uk, d) {
     if (uk.indexOf('M|sb_checklist_instances|') === 0) return 'Checklist “' + cut(v && v.name) + '”';
     if (uk.indexOf('I|sb_checklist_templates|') === 0) return 'Checklist template “' + cut(v && v.name) + '”';
     if (uk.indexOf('I|sb_promises_') === 0) return 'Promise “' + cut(v && v.what) + '”' + (v && v.who ? ' to ' + cut(v.who) : '');
+    if (uk.indexOf('I|sb_job_log|') === 0) return 'Job Log line “' + cut(v && v.text) + '”';
     if (uk.indexOf('I|sb_reminders.h') === 0) return 'Reminder heading “' + cut(v && (v.title || v.text)) + '”';
     if (uk.indexOf('I|sb_reminders.') === 0) return 'Reminder “' + cut(v && v.title) + '”';
     if (uk.indexOf('I|sb_time_sessions|') === 0) return 'Time entry' + (v && v.startISO ? ' of ' + mdFmt(String(v.startISO).slice(0, 10)) : '');
@@ -33702,6 +34077,7 @@ function _syncUnitKind(uk) {
   if (uk.indexOf('Q|') === 0) return ['quarter', 'quarters'];
   if (uk === 'T|top3' || uk.indexOf('M|sb_daily3_by_date|') === 0) return ['Top 3 day', 'Top 3 days'];
   if (uk.indexOf('I|sb_promises_') === 0) return ['promise', 'promises'];
+  if (uk.indexOf('I|sb_job_log|') === 0) return ['Job Log line', 'Job Log lines'];
   if (uk.indexOf('I|sb_reminders.') === 0) return ['reminder', 'reminders'];
   if (uk.indexOf('M|sb_checklist_instances|') === 0 || uk.indexOf('I|sb_checklist_templates|') === 0) return ['checklist', 'checklists'];
   if (uk.indexOf('I|sb_time_sessions|') === 0) return ['time entry', 'time entries'];
@@ -34146,7 +34522,7 @@ function _dcInspect(key, raw) {
       return { why: (where.length ? 'has damaged entries in ' + where.join(', ') : '') + (dup ? (where.length ? '; ' : '') + 'two items share one id (merging between devices could mix them up)' : ''),
                repair: () => { const md = {}; MIND_DUMP_GROUPS.forEach(g => { md[g] = _mdSanitizeRows(isArr(v[g]) ? v[g].filter(isObj) : []); }); Object.keys(v).forEach(k => { if (!MIND_DUMP_GROUPS.includes(k)) md[k] = v[k]; }); mdEnsureIds(md); return md; } };
     }
-    case 'sb_promises_business': case 'sb_promises_personal': case 'sb_time_sessions': case 'sb_checklist_templates': {
+    case 'sb_promises_business': case 'sb_promises_personal': case 'sb_time_sessions': case 'sb_checklist_templates': case 'sb_job_log': {
       if (!isArr(v)) return { why: 'is not a list', repair: () => [] };
       if (objList(v) && (key !== 'sb_checklist_templates' || v.every(t => isArr(t.sections)))) return null;
       return { why: 'has damaged entries', repair: () => v.filter(isObj).map(t => key === 'sb_checklist_templates' && !isArr(t.sections) ? Object.assign({}, t, { sections: [] }) : t) };
@@ -34184,7 +34560,7 @@ function _dcInspect(key, raw) {
 function _dcLabel(key) {
   if (key.indexOf('sb_week_') === 0) { try { return 'Week ' + weekRangeLabel(key.slice(8)); } catch (_) { return key; } }
   if (key.indexOf('sb_quarter_') === 0) { try { return 'Quarter ' + quarterRangeLabel(key.slice(11)); } catch (_) { return key; } }
-  return ({ [MIND_DUMP_KEY]: 'Mind Dump', sb_promises_business: 'Business promises', sb_promises_personal: 'Personal promises',
+  return ({ [MIND_DUMP_KEY]: 'Mind Dump', sb_promises_business: 'Business promises', sb_promises_personal: 'Personal promises', sb_job_log: 'Job Log',
             sb_time_sessions: 'Time log', sb_checklist_templates: 'Checklist templates', sb_checklist_instances: 'Attached checklists',
             sb_daily3_by_date: 'Daily Top 3 history', sb_reminders: 'Reminders', sb_index: 'List of weeks', sb_quarter_index: 'List of quarters' })[key] || key;
 }
@@ -34195,7 +34571,7 @@ function _dcKeysToCheck() {
     if (!k) continue;
     if (/^sb_week_\d{4}-\d{2}-\d{2}$/.test(k) || /^sb_quarter_\d{4}-\d{2}-\d{2}$/.test(k)) keys.push(k);
   }
-  [MIND_DUMP_KEY, 'sb_promises_business', 'sb_promises_personal', 'sb_time_sessions', 'sb_checklist_templates',
+  [MIND_DUMP_KEY, 'sb_promises_business', 'sb_promises_personal', 'sb_job_log', 'sb_time_sessions', 'sb_checklist_templates',
    'sb_checklist_instances', 'sb_daily3_by_date', 'sb_reminders', 'sb_index', 'sb_quarter_index'].forEach(k => { if (localStorage.getItem(k) != null) keys.push(k); });
   return keys.sort();
 }
